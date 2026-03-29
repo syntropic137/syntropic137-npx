@@ -59,6 +59,7 @@ export function startCallbackServer(
 
   let codeResolve: ((code: string) => void) | null = null;
   let codeReject: ((err: Error) => void) | null = null;
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
 
   const server = http.createServer((req, res) => {
     const url = new URL(req.url || "/", `http://127.0.0.1:${port}`);
@@ -66,11 +67,17 @@ export function startCallbackServer(
     if (url.pathname === "/callback") {
       handleCallback(url, state, res);
       if (state.error && codeReject) {
-        codeReject(new Error(`GitHub returned error: ${state.error}`));
+        const reject = codeReject;
         codeReject = null;
-      } else if (state.code && codeResolve) {
-        codeResolve(state.code);
         codeResolve = null;
+        if (timeoutHandle) { clearTimeout(timeoutHandle); timeoutHandle = null; }
+        reject(new Error(`GitHub returned error: ${state.error}`));
+      } else if (state.code && codeResolve) {
+        const resolve = codeResolve;
+        codeResolve = null;
+        codeReject = null;
+        if (timeoutHandle) { clearTimeout(timeoutHandle); timeoutHandle = null; }
+        resolve(state.code);
       }
     } else {
       res.writeHead(404);
@@ -88,7 +95,8 @@ export function startCallbackServer(
       return new Promise<string>((resolve, reject) => {
         codeResolve = resolve;
         codeReject = reject;
-        setTimeout(() => {
+        timeoutHandle = setTimeout(() => {
+          timeoutHandle = null;
           if (codeResolve) {
             codeResolve = null;
             codeReject = null;
@@ -104,6 +112,7 @@ export function startCallbackServer(
     },
 
     shutdown() {
+      if (timeoutHandle) { clearTimeout(timeoutHandle); timeoutHandle = null; }
       server.close();
     },
   };

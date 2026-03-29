@@ -2,6 +2,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { CliOptions, EnvValues } from "./types.js";
 import {
   banner,
@@ -41,7 +42,7 @@ import {
 // ---------------------------------------------------------------------------
 
 const PKG_DIR = path.resolve(
-  path.dirname(new URL(import.meta.url).pathname),
+  path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
 const VERSION = JSON.parse(

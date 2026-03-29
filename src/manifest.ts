@@ -1,6 +1,6 @@
 import * as crypto from "node:crypto";
 import * as https from "node:https";
-import { exec } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { findFreePort, startCallbackServer, buildAutoSubmitForm, startFormServer } from "./server.js";
 import { SecretsManager } from "./secrets.js";
 import { info, success, warn, spinner, dim, cyan, bold } from "./ui.js";
@@ -119,15 +119,15 @@ function apiRequest(url: string, method = "POST", data?: string): Promise<Record
 // ---------------------------------------------------------------------------
 
 function openBrowser(url: string): void {
-  const cmd =
-    process.platform === "darwin"
-      ? `open "${url}"`
-      : process.platform === "win32"
-        ? `start "${url}"`
-        : `xdg-open "${url}"`;
-  exec(cmd, () => {
-    // Ignore errors — we print the URL as fallback
-  });
+  const noop = () => {};
+  if (process.platform === "darwin") {
+    execFile("open", [url], noop);
+  } else if (process.platform === "win32") {
+    // `start` is a shell builtin — use cmd.exe with the URL as a separate arg
+    spawn("cmd.exe", ["/c", "start", "", url], { stdio: "ignore" }).unref();
+  } else {
+    execFile("xdg-open", [url], noop);
+  }
 }
 
 // ---------------------------------------------------------------------------
