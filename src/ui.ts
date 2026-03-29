@@ -1,5 +1,5 @@
 import * as readline from "node:readline";
-import { CMD } from "./constants.js";
+import { BIN, COMMANDS } from "./constants.js";
 
 // ---------------------------------------------------------------------------
 // ANSI color helpers (no dependencies)
@@ -180,34 +180,72 @@ export interface MenuItem {
   description: string;
 }
 
-export function interactiveMenu(items: MenuItem[], title?: string): Promise<string> {
+// Entropy flair frames — subtle cycling diamond in the banner subtitle
+const FLAIR_FRAMES = ["◇", "◈", "◆", "◈", "◇", "·", "◇", "◈"];
+
+export interface FlairConfig {
+  /** Lines above the menu save-point where the flair char lives */
+  linesAboveSave: number;
+  /** 1-based column of the flair character */
+  col: number;
+}
+
+export function interactiveMenu(
+  items: MenuItem[],
+  title?: string,
+  flair?: FlairConfig,
+): Promise<string> {
   return new Promise((resolve) => {
     const stdin = process.stdin;
+    const out = process.stdout;
     const wasRaw = stdin.isRaw;
+    const isTTY = out.isTTY ?? false;
 
     let selected = 0;
+    let flairIdx = 0;
 
-    function render() {
-      // Move cursor up to overwrite previous render (except first time)
-      const lines = items.length + (title ? 3 : 1);
-      process.stdout.write(`\x1b[${lines}A\x1b[J`);
-      if (title) {
-        console.log(`  ${bold(title)}`);
-        console.log();
-      }
+    function renderItems() {
+      // Move cursor to saved position and clear everything below it
+      out.write("\x1b[u\x1b[J");
       for (let i = 0; i < items.length; i++) {
         const item = items[i]!;
         const pointer = i === selected ? cyan("  ❯ ") : "    ";
         const label = i === selected ? bold(item.label) : item.label;
         const desc = dim(item.description);
-        console.log(`${pointer}${label}  ${desc}`);
+        out.write(`${pointer}${label}  ${desc}\n`);
       }
     }
 
-    // Initial render — print blank lines first so the cursor-up trick works
-    const initLines = items.length + (title ? 3 : 1);
-    for (let i = 0; i < initLines; i++) console.log();
-    render();
+    function updateFlair() {
+      if (!flair || !isTTY) return;
+      flairIdx++;
+      const ch = FLAIR_FRAMES[flairIdx % FLAIR_FRAMES.length]!;
+      // Move up from current position to the flair line, update char, move back
+      const linesUp = items.length + flair.linesAboveSave;
+      out.write(
+        `\x1b[${linesUp}F` +      // move up N lines (to start of line)
+        `\x1b[${flair.col}G` +    // move to column
+        cyan(ch) +                  // write the flair char
+        `\x1b[${linesUp}E`         // move back down N lines
+      );
+    }
+
+    // Print title once (never redrawn)
+    if (title) {
+      out.write(`  ${bold(title)}\n\n`);
+    }
+
+    // Save cursor position — this is the anchor for all redraws
+    out.write("\x1b[s");
+
+    // Hide cursor and draw initial items
+    out.write("\x1b[?25l");
+    renderItems();
+
+    // Animate the flair on a timer
+    const flairTimer = (flair && isTTY)
+      ? setInterval(updateFlair, 300)
+      : null;
 
     if (stdin.setRawMode) stdin.setRawMode(true);
     stdin.resume();
@@ -215,28 +253,26 @@ export function interactiveMenu(items: MenuItem[], title?: string): Promise<stri
 
     function onData(key: string) {
       if (key === "\x1b[A" || key === "k") {
-        // Up arrow or k
         selected = (selected - 1 + items.length) % items.length;
-        render();
+        renderItems();
       } else if (key === "\x1b[B" || key === "j") {
-        // Down arrow or j
         selected = (selected + 1) % items.length;
-        render();
+        renderItems();
       } else if (key === "\r" || key === "\n") {
-        // Enter
         cleanup();
         resolve(items[selected]!.value);
       } else if (key === "\x03") {
-        // Ctrl+C
         cleanup();
         process.exit(0);
       }
     }
 
     function cleanup() {
+      if (flairTimer) clearInterval(flairTimer);
       stdin.removeListener("data", onData);
       if (stdin.setRawMode) stdin.setRawMode(wasRaw ?? false);
       stdin.pause();
+      out.write("\x1b[?25h");
     }
 
     stdin.on("data", onData);
@@ -256,17 +292,30 @@ const LOGO = [
   "╚══════╝   ╚═╝   ╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝ ╚═════╝ ╚═╝╚═════╝    ╚═╝  ",
 ];
 
-export function banner(): void {
+/**
+ * Print the banner. Returns the number of lines printed (for flair positioning).
+ */
+export function banner(version?: string): number {
   const width = 92;
-  console.log();
-  console.log(`  ${dim(BOX.tl + BOX.h.repeat(width + 2) + BOX.tr)}`);
+  const versionStr = version ? dim(`v${version}`) : "";
+  const versionLen = version ? version.length + 1 : 0; // "v" + version
+  const subtitleText = `  ${bold("Self-Host Setup CLI")}`;
+  const subtitleStripped = 2 + 19; // "  " + "Self-Host Setup CLI"
+  // Pad so version sits at the right edge: width - subtitle - version - flair(2) - gap(1)
+  const gap = Math.max(1, width - subtitleStripped - versionLen - 2);
+  const subtitle = `${FLAIR_FRAMES[0]} ${subtitleText}${" ".repeat(gap)}${versionStr}`;
+
+  let lines = 0;
+  console.log(); lines++;
+  console.log(`  ${dim(BOX.tl + BOX.h.repeat(width + 2) + BOX.tr)}`); lines++;
   for (const line of LOGO) {
-    console.log(boxLine(cyan(line), width));
+    console.log(boxLine(cyan(line), width)); lines++;
   }
-  console.log(boxLine("", width));
-  console.log(boxLine(`  ${bold("Self-Host Setup CLI")}${" ".repeat(73)}`, width));
-  console.log(`  ${dim(BOX.bl + BOX.h.repeat(width + 2) + BOX.br)}`);
-  console.log();
+  console.log(boxLine("", width)); lines++;
+  console.log(boxLine(subtitle, width)); lines++;
+  console.log(`  ${dim(BOX.bl + BOX.h.repeat(width + 2) + BOX.br)}`); lines++;
+  console.log(); lines++;
+  return lines;
 }
 
 // ---------------------------------------------------------------------------
@@ -278,7 +327,7 @@ export function summaryBox(opts: {
   port: string;
   installDir: string;
 }): void {
-  const width = 56;
+  const width = 68;
   console.log();
   console.log(`  ${dim(BOX.tl + BOX.h.repeat(width + 2) + BOX.tr)}`);
 
@@ -292,10 +341,13 @@ export function summaryBox(opts: {
   console.log(boxLine(`  Directory   ${dim(opts.installDir)}`, width));
   console.log(boxLine("", width));
   console.log(boxLine(dim("  Commands:"), width));
-  console.log(boxLine(`    ${bold(CMD.status)}    ${dim("container health")}`, width));
-  console.log(boxLine(`    ${bold(CMD.logs)}      ${dim("tail logs")}`, width));
-  console.log(boxLine(`    ${bold(CMD.stop)}      ${dim("stop the stack")}`, width));
-  console.log(boxLine(`    ${bold(CMD.update)}    ${dim("pull latest + restart")}`, width));
+  // Show bare command for interactive menu first
+  console.log(boxLine(`    ${bold(BIN.padEnd(30))}${dim("Interactive menu")}`, width));
+  for (const c of COMMANDS) {
+    if (c.name === "init") continue; // skip init in post-install summary
+    const cmd = `${BIN} ${c.name}`;
+    console.log(boxLine(`    ${bold(cmd.padEnd(30))}${dim(c.description)}`, width));
+  }
 
   console.log(`  ${dim(BOX.bl + BOX.h.repeat(width + 2) + BOX.br)}`);
   console.log();

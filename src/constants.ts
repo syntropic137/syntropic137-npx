@@ -21,18 +21,34 @@ export const DEFAULT_VERSION = "latest";
 // CLI command reference (single source of truth for all user-facing commands)
 // ---------------------------------------------------------------------------
 
-const BIN = "npx syntropic137";
+export const BIN = "npx syntropic137";
 
-export const CMD = {
-  init:       `${BIN} init`,
-  status:     `${BIN} status`,
-  stop:       `${BIN} stop`,
-  start:      `${BIN} start`,
-  logs:       `${BIN} logs`,
-  update:     `${BIN} update`,
-  initFirst:  `${BIN} init`,
-  skipDocker: `${BIN} init --skip-docker`,
-} as const;
+export interface CommandDef {
+  name: string;
+  description: string;
+  /** Shown in help text after the command, e.g. "[options]" */
+  args?: string;
+}
+
+/**
+ * All available CLI commands. The menu, help text, and summary box
+ * all derive from this single list.
+ */
+export const COMMANDS: readonly CommandDef[] = [
+  { name: "init",   description: "Bootstrap a Syntropic137 stack", args: "[options]" },
+  { name: "status", description: "Show container health" },
+  { name: "start",  description: "Start the stack" },
+  { name: "stop",   description: "Stop the stack" },
+  { name: "logs",   description: "Tail container logs" },
+  { name: "update", description: "Pull latest images and restart" },
+  { name: "plugin", description: "Install or update the Claude Code plugin" },
+] as const;
+
+/** Shorthand lookup: CMD.init → "npx syntropic137 init" */
+export const CMD = Object.fromEntries([
+  ...COMMANDS.map((c) => [c.name, `${BIN} ${c.name}`]),
+  ["skipDocker", `${BIN} init --skip-docker`],
+]) as Record<string, string>;
 
 // ---------------------------------------------------------------------------
 // Template files to copy during init
@@ -58,6 +74,15 @@ export const SECRET_FILES = [
 export const PEM_FILE = "github-app-private-key.pem";
 export const WEBHOOK_SECRET_FILE = "github-webhook-secret.txt";
 export const CLIENT_SECRET_FILE = "github-client-secret.txt";
+
+// ---------------------------------------------------------------------------
+// Claude Code plugin
+// ---------------------------------------------------------------------------
+
+export const CLAUDE_PLUGIN_REPO = "syntropic137/syntropic137-claude-plugin";
+export const CLAUDE_PLUGIN_NAME = "syntropic137";
+/** Full name@source used by `claude plugin update` */
+export const CLAUDE_PLUGIN_FULL = "syntropic137@syntropic137";
 
 // ---------------------------------------------------------------------------
 // GitHub

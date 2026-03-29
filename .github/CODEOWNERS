@@ -1,0 +1,14 @@
+# CODEOWNERS — auto-request reviews on PRs touching these paths.
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default: all changes require review
+*                           @NeuralEmpowerment
+
+# Templates synced from upstream — review before merge
+templates/                  @NeuralEmpowerment
+
+# Publish workflow — gatekeeper for npm supply chain
+.github/workflows/publish.yml @NeuralEmpowerment
+
+# Template sync workflow
+.github/workflows/template-sync.yml @NeuralEmpowerment

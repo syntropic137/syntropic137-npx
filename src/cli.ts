@@ -3,6 +3,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 import type { CliOptions, EnvValues } from "./types.js";
 import {
   banner,
@@ -35,6 +36,11 @@ import {
   COMPOSE_FILE,
   TEMPLATE_FILES,
   CMD,
+  BIN,
+  COMMANDS,
+  CLAUDE_PLUGIN_REPO,
+  CLAUDE_PLUGIN_NAME,
+  CLAUDE_PLUGIN_FULL,
 } from "./constants.js";
 
 // ---------------------------------------------------------------------------
@@ -73,7 +79,7 @@ export class InitFlow {
   async run(): Promise<void> {
     banner();
 
-    let steps = 10;
+    let steps = 11;
     if (this.opts.skipGithub) steps -= 1;
     if (this.opts.skipDocker) steps -= 3;
     setTotalSteps(steps);
@@ -199,7 +205,11 @@ export class InitFlow {
       }
     }
 
-    // ── Step 7: Write .env ──────────────────────────────────────────────
+    // ── Step 7: Claude Code plugin ───────────────────────────────────────
+    step("Claude Code plugin");
+    await this.installClaudePlugin();
+
+    // ── Step 8: Write .env ──────────────────────────────────────────────
     step("Writing configuration");
     this.config.writeEnv(envValues, TEMPLATES_DIR);
 
@@ -210,7 +220,7 @@ export class InitFlow {
       return;
     }
 
-    // ── Steps 8–10: Docker ──────────────────────────────────────────────
+    // ── Steps 9–11: Docker ──────────────────────────────────────────────
     const docker = new DockerService(this.installDir);
 
     step("Pulling container images");
@@ -234,6 +244,72 @@ export class InitFlow {
     const dest = path.join(this.installDir, relativePath);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.copyFileSync(src, dest);
+  }
+
+  private async installClaudePlugin(): Promise<void> {
+    // Check if claude CLI is available
+    if (!InitFlow.hasClaudeCli()) {
+      info("Claude Code CLI not found — skipping plugin install.");
+      info("Install later: " + CMD.plugin);
+      return;
+    }
+
+    const installed = InitFlow.isPluginInstalled();
+    info("Adds slash commands and platform knowledge to Claude Code.");
+
+    if (installed) {
+      const proceed = await confirm("Update the Claude Code plugin?");
+      if (!proceed) { info("Skipped."); return; }
+    } else {
+      const proceed = await confirm("Install the Claude Code plugin? (recommended)");
+      if (!proceed) {
+        info("Skipped. Install later: " + CMD.plugin);
+        return;
+      }
+    }
+
+    InitFlow.syncPlugin(installed);
+  }
+
+  /** Check if `claude` CLI is on PATH. */
+  static hasClaudeCli(): boolean {
+    try {
+      execFileSync("claude", ["--version"], { stdio: "pipe" });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Check if the syntropic137 plugin is already installed. */
+  static isPluginInstalled(): boolean {
+    try {
+      const output = execFileSync("claude", ["plugin", "list"], {
+        encoding: "utf-8",
+        stdio: "pipe",
+      });
+      return output.includes(`${CLAUDE_PLUGIN_NAME}@`);
+    } catch {
+      return false;
+    }
+  }
+
+  /** Install or update the Claude Code plugin. */
+  static syncPlugin(isInstalled: boolean): void {
+    try {
+      if (isInstalled) {
+        execFileSync("claude", ["plugin", "update", CLAUDE_PLUGIN_FULL], { stdio: "pipe" });
+        success("Claude Code plugin updated");
+      } else {
+        execFileSync("claude", ["plugin", "marketplace", "add", CLAUDE_PLUGIN_REPO], { stdio: "pipe" });
+        execFileSync("claude", ["plugin", "install", CLAUDE_PLUGIN_NAME], { stdio: "pipe" });
+        success("Claude Code plugin installed");
+      }
+    } catch (err) {
+      warn("Could not install Claude Code plugin.");
+      if (err instanceof Error) info(err.message);
+      info("Install manually: claude plugin marketplace add " + CLAUDE_PLUGIN_REPO);
+    }
   }
 }
 
@@ -281,27 +357,40 @@ export class CLI {
       case "update":
         new DockerService(this.resolveDir(dir)).update();
         break;
+
+      case "plugin":
+        CLI.pluginSync();
+        break;
     }
+  }
+
+  private static pluginSync(): void {
+    if (!InitFlow.hasClaudeCli()) {
+      fail("Claude Code CLI not found.");
+      info("Install Claude Code: https://docs.anthropic.com/en/docs/claude-code");
+      process.exit(1);
+    }
+
+    const installed = InitFlow.isPluginInstalled();
+    InitFlow.syncPlugin(installed);
   }
 
   // ── Interactive menu ──────────────────────────────────────────────────
 
-  private static readonly MENU_ITEMS: MenuItem[] = [
-    { label: "init",    value: "init",   description: "Bootstrap a new Syntropic137 stack" },
-    { label: "status",  value: "status", description: "Show container health" },
-    { label: "start",   value: "start",  description: "Start the stack" },
-    { label: "stop",    value: "stop",   description: "Stop the stack" },
-    { label: "logs",    value: "logs",   description: "Tail container logs" },
-    { label: "update",  value: "update", description: "Pull latest images and restart" },
-  ];
-
   private async showMenu(): Promise<CliOptions["command"]> {
-    banner();
-    info(`v${VERSION}`);
-    console.log();
+    banner(VERSION);
+    // Flair target = subtitle line in banner. From the save point (after title+blank),
+    // count up: blank(1) + title(1) + blank-after-banner(1) + bottom-border(1) + subtitle(1) = 5
+    const flairLinesAboveSave = 5;
+    const menuItems: MenuItem[] = COMMANDS.map((c) => ({
+      label: c.name,
+      value: c.name,
+      description: c.description,
+    }));
     const choice = await interactiveMenu(
-      CLI.MENU_ITEMS,
+      menuItems,
       "What would you like to do?",
+      { linesAboveSave: flairLinesAboveSave, col: 5 },
     );
     console.log();
     return choice as CliOptions["command"];
@@ -363,16 +452,18 @@ export class CLI {
   }
 
   private static printHelp(): void {
+    // Build usage lines dynamically from COMMANDS
+    const usageLines = COMMANDS.map((c) => {
+      const cmd = `${BIN} ${c.name}${c.args ? " " + c.args : ""}`;
+      return `    ${cmd.padEnd(34)}${c.description}`;
+    }).join("\n");
+
     console.log(`
   ${bold("syntropic137")} v${VERSION} — self-host setup CLI
 
   ${bold("USAGE")}
-    ${CMD.init} [options]     Bootstrap a Syntropic137 stack
-    ${CMD.status}             Show container health
-    ${CMD.stop}               Stop the stack
-    ${CMD.start}              Start the stack
-    ${CMD.logs}               Tail container logs
-    ${CMD.update}             Pull latest images and restart
+    ${BIN.padEnd(34)}Interactive menu
+${usageLines}
 
   ${bold("OPTIONS")}
     --org <name>          GitHub org for the app (default: personal)

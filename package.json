@@ -2,7 +2,7 @@
   "name": "syntropic137",
   "version": "0.18.0",
   "type": "module",
-  "description": "Zero-prereq self-host setup CLI for Syntropic137",
+  "description": "Zero-dependency self-host setup CLI for Syntropic137",
   "bin": {
     "syntropic137": "./dist/cli.js"
   },
@@ -11,9 +11,15 @@
     "prepublishOnly": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "prestart": "npm run build",
+    "start": "node dist/cli.js",
+    "preinit": "npm run build",
     "init": "node dist/cli.js init",
+    "preinit:skip-docker": "npm run build",
     "init:skip-docker": "node dist/cli.js init --skip-docker",
-    "init:skip-github": "node dist/cli.js init --skip-github"
+    "preinit:skip-github": "npm run build",
+    "init:skip-github": "node dist/cli.js init --skip-github",
+    "sync-templates": "./scripts/sync-templates.sh"
   },
   "engines": {
     "node": ">=18.0.0"
