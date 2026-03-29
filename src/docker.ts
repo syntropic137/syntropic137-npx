@@ -1,9 +1,14 @@
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import * as path from "node:path";
 import * as http from "node:http";
 import { fail, info, spinner, success, warn } from "./ui.js";
-
-const COMPOSE_FILE = "docker-compose.syntropic137.yaml";
+import {
+  COMPOSE_FILE,
+  MIN_COMPOSE_VERSION,
+  HEALTH_CHECK_TIMEOUT_MS,
+  HEALTH_CHECK_INTERVAL_MS,
+  CMD,
+} from "./constants.js";
 
 /**
  * Parse a Docker Compose version string like "Docker Compose version v2.29.1"
@@ -16,11 +21,140 @@ export function parseComposeVersion(output: string): [number, number, number] | 
 }
 
 /**
+ * Manages Docker Compose lifecycle for a Syntropic137 installation.
+ *
+ * Each instance is bound to a specific install directory.
+ */
+export class DockerService {
+  constructor(private readonly installDir: string) {}
+
+  /** Run `docker compose pull`. */
+  pull(): void {
+    const s = spinner("Pulling images...");
+    try {
+      this.compose(["pull"], "pipe");
+      s.stop("Images pulled");
+    } catch (err) {
+      s.stop();
+      fail("Failed to pull images. Check your internet connection and GHCR access.");
+      if (err instanceof Error) info(err.message);
+      process.exit(1);
+    }
+  }
+
+  /** Run `docker compose up -d`. Returns true if successful. */
+  up(): boolean {
+    try {
+      this.compose(["up", "-d"], "pipe");
+      success("Containers started");
+      return true;
+    } catch (err) {
+      warn("Some containers may have failed to start.");
+      if (err instanceof Error) info(err.message);
+      info(`Run \`${CMD.status}\` to check container health.`);
+      return false;
+    }
+  }
+
+  /** Run `docker compose down`. */
+  down(): void {
+    this.compose(["down"], "inherit");
+  }
+
+  /** Run `docker compose down -v` — removes containers AND volumes. */
+  downWithVolumes(): void {
+    this.compose(["down", "-v"], "inherit");
+  }
+
+  /** Run `docker compose stop`. */
+  stop(): void {
+    this.compose(["stop"], "inherit");
+  }
+
+  /** Run `docker compose start`. */
+  start(): void {
+    this.compose(["start"], "inherit");
+  }
+
+  /** Run `docker compose logs --tail 100 -f`. */
+  logs(): void {
+    this.compose(["logs", "--tail", "100", "-f"], "inherit");
+  }
+
+  /** Run `docker compose ps`. */
+  status(): void {
+    this.compose(["ps"], "inherit");
+  }
+
+  /** Pull latest images and restart. */
+  update(): void {
+    info("Pulling latest images...");
+    this.compose(["pull"], "inherit");
+    info("Restarting with new images...");
+    this.compose(["up", "-d"], "inherit");
+    success("Update complete");
+  }
+
+  /** Poll the gateway health endpoint until 200 or timeout. */
+  async waitForHealth(
+    port: string | number = 8137,
+    timeoutMs = HEALTH_CHECK_TIMEOUT_MS,
+  ): Promise<boolean> {
+    const s = spinner("Waiting for services to be healthy...");
+    const start = Date.now();
+
+    while (Date.now() - start < timeoutMs) {
+      try {
+        const ok = await new Promise<boolean>((resolve) => {
+          const req = http.request(
+            { hostname: "127.0.0.1", port: Number(port), path: "/health", timeout: 3000 },
+            (res) => {
+              res.resume();
+              resolve(res.statusCode === 200);
+            },
+          );
+          req.on("error", () => resolve(false));
+          req.on("timeout", () => {
+            req.destroy();
+            resolve(false);
+          });
+          req.end();
+        });
+        if (ok) {
+          s.stop("Services healthy");
+          return true;
+        }
+      } catch {
+        // retry
+      }
+      await new Promise((r) => setTimeout(r, HEALTH_CHECK_INTERVAL_MS));
+    }
+
+    s.stop();
+    warn("Health check timed out — services may still be starting.");
+    info(`Run \`${CMD.status}\` to check container health.`);
+    return false;
+  }
+
+  // ── Private ────────────────────────────────────────────────────────────
+
+  private compose(args: string[], stdio: "pipe" | "inherit"): void {
+    execFileSync("docker", ["compose", "-f", COMPOSE_FILE, ...args], {
+      cwd: this.installDir,
+      stdio,
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Static check (no install dir needed)
+// ---------------------------------------------------------------------------
+
+/**
  * Check that Docker is installed, running, and Compose v2.20+ is available.
  * Exits the process on failure.
  */
 export function checkDocker(): void {
-  // Check docker is installed
   try {
     execFileSync("docker", ["info"], { stdio: "pipe" });
   } catch {
@@ -29,7 +163,6 @@ export function checkDocker(): void {
     process.exit(1);
   }
 
-  // Check docker compose v2
   let versionOutput: string;
   try {
     versionOutput = execFileSync("docker", ["compose", "version"], {
@@ -50,7 +183,8 @@ export function checkDocker(): void {
   }
 
   const [major, minor] = version;
-  if (major < 2 || (major === 2 && minor < 20)) {
+  const [reqMajor, reqMinor] = MIN_COMPOSE_VERSION;
+  if (major < reqMajor || (major === reqMajor && minor < reqMinor)) {
     fail(`Docker Compose v2.20+ required (found v${version.join(".")}).`);
     info("Update Docker Desktop or install the latest Compose plugin.");
     process.exit(1);
@@ -59,148 +193,46 @@ export function checkDocker(): void {
   success(`Docker Compose v${version.join(".")} detected`);
 }
 
-/**
- * Run `docker compose pull` in the install directory.
- */
+// ---------------------------------------------------------------------------
+// Backward-compatible free functions
+// ---------------------------------------------------------------------------
+
 export function composePull(installDir: string): void {
-  const s = spinner("Pulling images...");
-  try {
-    execFileSync("docker", ["compose", "-f", COMPOSE_FILE, "pull"], {
-      cwd: installDir,
-      stdio: "pipe",
-    });
-    s.stop("Images pulled");
-  } catch (err) {
-    s.stop();
-    fail("Failed to pull images. Check your internet connection and GHCR access.");
-    if (err instanceof Error) info(err.message);
-    process.exit(1);
-  }
+  new DockerService(installDir).pull();
 }
 
-/**
- * Run `docker compose up -d` in the install directory.
- */
 export function composeUp(installDir: string): void {
-  try {
-    execFileSync("docker", ["compose", "-f", COMPOSE_FILE, "up", "-d"], {
-      cwd: installDir,
-      stdio: "pipe",
-    });
-    success("Containers started");
-  } catch (err) {
-    fail("Failed to start containers.");
-    if (err instanceof Error) info(err.message);
-    process.exit(1);
-  }
+  new DockerService(installDir).up();
 }
 
-/**
- * Run `docker compose down` in the install directory.
- */
 export function composeDown(installDir: string): void {
-  execFileSync("docker", ["compose", "-f", COMPOSE_FILE, "down"], {
-    cwd: installDir,
-    stdio: "inherit",
-  });
+  new DockerService(installDir).down();
 }
 
-/**
- * Run `docker compose stop` in the install directory.
- */
 export function composeStop(installDir: string): void {
-  execFileSync("docker", ["compose", "-f", COMPOSE_FILE, "stop"], {
-    cwd: installDir,
-    stdio: "inherit",
-  });
+  new DockerService(installDir).stop();
 }
 
-/**
- * Run `docker compose start` in the install directory.
- */
 export function composeStart(installDir: string): void {
-  execFileSync("docker", ["compose", "-f", COMPOSE_FILE, "start"], {
-    cwd: installDir,
-    stdio: "inherit",
-  });
+  new DockerService(installDir).start();
 }
 
-/**
- * Run `docker compose logs` in the install directory.
- */
 export function composeLogs(installDir: string): void {
-  execFileSync("docker", ["compose", "-f", COMPOSE_FILE, "logs", "--tail", "100", "-f"], {
-    cwd: installDir,
-    stdio: "inherit",
-  });
+  new DockerService(installDir).logs();
 }
 
-/**
- * Run `docker compose ps` for status.
- */
 export function composeStatus(installDir: string): void {
-  execFileSync("docker", ["compose", "-f", COMPOSE_FILE, "ps"], {
-    cwd: installDir,
-    stdio: "inherit",
-  });
+  new DockerService(installDir).status();
 }
 
-/**
- * Pull latest images and restart.
- */
 export function composeUpdate(installDir: string): void {
-  info("Pulling latest images...");
-  execFileSync("docker", ["compose", "-f", COMPOSE_FILE, "pull"], {
-    cwd: installDir,
-    stdio: "inherit",
-  });
-  info("Restarting with new images...");
-  execFileSync("docker", ["compose", "-f", COMPOSE_FILE, "up", "-d"], {
-    cwd: installDir,
-    stdio: "inherit",
-  });
-  success("Update complete");
+  new DockerService(installDir).update();
 }
 
-/**
- * Poll the gateway health endpoint until it returns 200 or timeout.
- */
 export async function waitForHealth(
   port: string | number = 8137,
-  timeoutMs = 120_000,
+  timeoutMs = HEALTH_CHECK_TIMEOUT_MS,
 ): Promise<boolean> {
-  const s = spinner("Waiting for services to be healthy...");
-  const start = Date.now();
-
-  while (Date.now() - start < timeoutMs) {
-    try {
-      const ok = await new Promise<boolean>((resolve) => {
-        const req = http.request(
-          { hostname: "127.0.0.1", port: Number(port), path: "/health", timeout: 3000 },
-          (res) => {
-            res.resume();
-            resolve(res.statusCode === 200);
-          },
-        );
-        req.on("error", () => resolve(false));
-        req.on("timeout", () => {
-          req.destroy();
-          resolve(false);
-        });
-        req.end();
-      });
-      if (ok) {
-        s.stop("Services healthy");
-        return true;
-      }
-    } catch {
-      // retry
-    }
-    await new Promise((r) => setTimeout(r, 2000));
-  }
-
-  s.stop();
-  warn("Health check timed out — services may still be starting.");
-  info("Run `syntropic137 status` to check container health.");
-  return false;
+  // Health check doesn't need an install dir
+  return new DockerService("").waitForHealth(port, timeoutMs);
 }

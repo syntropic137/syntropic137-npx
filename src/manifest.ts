@@ -2,16 +2,15 @@ import * as crypto from "node:crypto";
 import * as https from "node:https";
 import { exec } from "node:child_process";
 import { findFreePort, startCallbackServer, buildAutoSubmitForm, startFormServer } from "./server.js";
-import { savePem, saveWebhookSecret, saveClientSecret } from "./secrets.js";
-import { info, success, warn, spinner } from "./ui.js";
+import { SecretsManager } from "./secrets.js";
+import { info, success, warn, spinner, dim, cyan, bold } from "./ui.js";
 import type { ManifestResult, AppPermissions } from "./types.js";
-
-// ---------------------------------------------------------------------------
-// Constants (matching github_manifest.py)
-// ---------------------------------------------------------------------------
-
-const GITHUB_BASE = "https://github.com";
-const GITHUB_API = "https://api.github.com";
+import {
+  GITHUB_BASE,
+  GITHUB_API,
+  PROJECT_URL,
+  MANIFEST_TIMEOUT_MS,
+} from "./constants.js";
 
 const DEFAULT_PERMISSIONS: AppPermissions = {
   contents: "write",
@@ -42,7 +41,7 @@ const DEFAULT_EVENTS: string[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Manifest builder
+// Manifest builder (pure function — no class needed)
 // ---------------------------------------------------------------------------
 
 export interface ManifestOptions {
@@ -54,7 +53,7 @@ export interface ManifestOptions {
 export function buildManifest(opts: ManifestOptions): Record<string, unknown> {
   const manifest: Record<string, unknown> = {
     name: opts.appName,
-    url: "https://github.com/syntropic137/syntropic137",
+    url: PROJECT_URL,
     redirect_url: opts.redirectUrl,
     public: false,
     default_permissions: DEFAULT_PERMISSIONS,
@@ -132,7 +131,121 @@ function openBrowser(url: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// Orchestrator
+// GitHubAppSetup — orchestrates the full manifest flow
+// ---------------------------------------------------------------------------
+
+export interface GitHubAppSetupOptions {
+  appName: string;
+  webhookUrl?: string;
+  secretsDir: string;
+  org?: string;
+}
+
+/**
+ * Orchestrates the GitHub App Manifest creation flow:
+ *
+ * 1. Start callback + form servers on ephemeral ports
+ * 2. Open browser → user approves → GitHub redirects back
+ * 3. Exchange temporary code for credentials
+ * 4. Save PEM, webhook secret, client secret to disk
+ * 5. Open installation page
+ */
+export class GitHubAppSetup {
+  private readonly secrets: SecretsManager;
+
+  constructor(private readonly opts: GitHubAppSetupOptions) {
+    this.secrets = new SecretsManager(opts.secretsDir);
+  }
+
+  async run(): Promise<ManifestResult> {
+    const [callbackPort, formPort] = await Promise.all([findFreePort(), findFreePort()]);
+
+    const redirectUrl = `http://127.0.0.1:${callbackPort}/callback`;
+    const manifest = buildManifest({
+      appName: this.opts.appName,
+      redirectUrl,
+      webhookUrl: this.opts.webhookUrl,
+    });
+    const manifestJson = JSON.stringify(manifest);
+
+    // CSRF state
+    const csrfState = crypto.randomBytes(16).toString("base64url");
+
+    // Build GitHub target URL
+    const createUrl = this.opts.org
+      ? `${GITHUB_BASE}/organizations/${this.opts.org}/settings/apps/new`
+      : `${GITHUB_BASE}/settings/apps/new`;
+
+    // Start servers
+    const callbackHandle = startCallbackServer(callbackPort, csrfState);
+    const formHtml = buildAutoSubmitForm(createUrl, manifestJson, csrfState);
+    const formServer = startFormServer(formPort, formHtml);
+    const formUrl = `http://127.0.0.1:${formPort}/start`;
+
+    info(`Opening browser to create GitHub App ${bold(`'${this.opts.appName}'`)}...`);
+    info(dim(`(If the browser doesn't open, visit: ${formUrl})`));
+    openBrowser(formUrl);
+    console.log();
+
+    const s = spinner("Waiting for GitHub to redirect back...");
+
+    let code: string;
+    try {
+      code = await callbackHandle.waitForCode(MANIFEST_TIMEOUT_MS);
+      s.stop("Received authorization code");
+    } catch (err) {
+      s.stop();
+      formServer.close();
+      callbackHandle.shutdown();
+      throw err;
+    }
+
+    formServer.close();
+
+    // Exchange code for credentials
+    const sx = spinner("Exchanging code for credentials...");
+    const exchangeUrl = `${GITHUB_API}/app-manifests/${code}/conversions`;
+    const credentials = (await apiRequest(exchangeUrl, "POST", "")) as Record<string, string>;
+    sx.stop("Credentials received");
+
+    // Save credentials
+    this.secrets.savePem(credentials.pem || "");
+    this.secrets.saveWebhookSecret(credentials.webhook_secret || "");
+    this.secrets.saveClientSecret(credentials.client_secret || "");
+
+    const slug = credentials.slug || this.opts.appName;
+    const settingsUrl = `${GITHUB_BASE}/settings/apps/${slug}`;
+
+    callbackHandle.shutdown();
+
+    // ── Success summary ───────────────────────────────────────────────
+    console.log();
+    success(`GitHub App ${bold(`'${slug}'`)} created!`);
+    console.log();
+    info(`${dim("Settings:")}  ${cyan(settingsUrl)}`);
+    info(`${dim("Tip:")}       Add a logo → ${cyan(settingsUrl)} → "Display information"`);
+    console.log();
+
+    // Open installation page
+    const installUrl = `${GITHUB_BASE}/apps/${slug}/installations/new`;
+    info(`Opening installation page...`);
+    info(`Install the app on the repos you want Syntropic137 to access.`);
+    openBrowser(installUrl);
+
+    return {
+      id: Number(credentials.id) || 0,
+      slug,
+      pem: credentials.pem || "",
+      webhook_secret: credentials.webhook_secret || "",
+      client_id: credentials.client_id || "",
+      client_secret: credentials.client_secret || "",
+      html_url: settingsUrl,
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Backward-compatible free function
 // ---------------------------------------------------------------------------
 
 export interface ManifestFlowOptions {
@@ -142,95 +255,6 @@ export interface ManifestFlowOptions {
   org?: string;
 }
 
-/**
- * Run the full GitHub App Manifest flow:
- *
- * 1. Build manifest JSON
- * 2. Start callback server on ephemeral port
- * 3. Serve auto-submit form → open browser
- * 4. Wait for GitHub redirect with temporary code
- * 5. Exchange code for credentials
- * 6. Save PEM + secrets
- * 7. Open installation page, capture installation_id
- */
 export async function runManifestFlow(opts: ManifestFlowOptions): Promise<ManifestResult> {
-  const [callbackPort, formPort] = await Promise.all([findFreePort(), findFreePort()]);
-
-  const redirectUrl = `http://127.0.0.1:${callbackPort}/callback`;
-
-  const manifest = buildManifest({
-    appName: opts.appName,
-    redirectUrl,
-    webhookUrl: opts.webhookUrl,
-  });
-  const manifestJson = JSON.stringify(manifest);
-
-  // CSRF state
-  const csrfState = crypto.randomBytes(16).toString("base64url");
-
-  // Build GitHub target URL
-  const createUrl = opts.org
-    ? `${GITHUB_BASE}/organizations/${opts.org}/settings/apps/new`
-    : `${GITHUB_BASE}/settings/apps/new`;
-
-  // Start servers
-  const callbackHandle = startCallbackServer(callbackPort, csrfState);
-  const formHtml = buildAutoSubmitForm(createUrl, manifestJson, csrfState);
-  const formServer = startFormServer(formPort, formHtml);
-  const formUrl = `http://127.0.0.1:${formPort}/start`;
-
-  info(`Opening browser to create GitHub App '${opts.appName}'...`);
-  info(`(If the browser doesn't open, visit: ${formUrl})`);
-  openBrowser(formUrl);
-
-  const s = spinner("Waiting for GitHub to redirect back...");
-
-  let code: string;
-  try {
-    code = await callbackHandle.waitForCode(300_000);
-    s.stop("Received authorization code");
-  } catch (err) {
-    s.stop();
-    formServer.close();
-    callbackHandle.shutdown();
-    throw err;
-  }
-
-  formServer.close();
-
-  // Exchange code for credentials
-  info("Exchanging code for credentials...");
-  const exchangeUrl = `${GITHUB_API}/app-manifests/${code}/conversions`;
-  const credentials = (await apiRequest(exchangeUrl, "POST", "")) as Record<string, string>;
-
-  // Save credentials
-  savePem(opts.secretsDir, credentials.pem || "");
-  saveWebhookSecret(opts.secretsDir, credentials.webhook_secret || "");
-  saveClientSecret(opts.secretsDir, credentials.client_secret || "");
-
-  const slug = credentials.slug || opts.appName;
-  const htmlUrl = credentials.html_url || `${GITHUB_BASE}/settings/apps/${slug}`;
-
-  success(`GitHub App '${slug}' created!`);
-  info(`App settings: ${htmlUrl}`);
-
-  callbackHandle.shutdown();
-
-  // Open installation page so the user can install the app on their repos.
-  // Installation IDs are resolved dynamically at runtime per-repo — we don't
-  // store a single ID since the app can be installed across multiple orgs.
-  info(`Opening installation page for '${slug}'...`);
-  const installUrl = `${GITHUB_BASE}/apps/${slug}/installations/new`;
-  openBrowser(installUrl);
-  info("Install the app on the repos you want Syntropic137 to access.");
-
-  return {
-    id: Number(credentials.id) || 0,
-    slug,
-    pem: credentials.pem || "",
-    webhook_secret: credentials.webhook_secret || "",
-    client_id: credentials.client_id || "",
-    client_secret: credentials.client_secret || "",
-    html_url: htmlUrl,
-  };
+  return new GitHubAppSetup(opts).run();
 }

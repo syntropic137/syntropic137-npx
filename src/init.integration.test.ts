@@ -20,12 +20,24 @@ vi.mock("./ui.js", () => ({
   prompt: vi.fn().mockResolvedValue(""),
   promptSecret: vi.fn().mockResolvedValue("sk-ant-test-key-123"),
   confirm: vi.fn().mockResolvedValue(true),
+  summaryBox: vi.fn(),
   spinner: vi.fn(() => ({ stop: vi.fn(), update: vi.fn() })),
 }));
 
 // Mock Docker — not needed with --skip-docker but prevents accidental calls
 vi.mock("./docker.js", () => ({
   checkDocker: vi.fn(),
+  DockerService: vi.fn().mockImplementation(() => ({
+    pull: vi.fn(),
+    up: vi.fn(),
+    down: vi.fn(),
+    stop: vi.fn(),
+    start: vi.fn(),
+    logs: vi.fn(),
+    status: vi.fn(),
+    update: vi.fn(),
+    waitForHealth: vi.fn().mockResolvedValue(true),
+  })),
   composePull: vi.fn(),
   composeUp: vi.fn(),
   composeDown: vi.fn(),
@@ -39,8 +51,8 @@ vi.mock("./docker.js", () => ({
 }));
 
 // Mock manifest flow — returns fake credentials
-vi.mock("./manifest.js", () => ({
-  runManifestFlow: vi.fn().mockResolvedValue({
+vi.mock("./manifest.js", () => {
+  const result = {
     id: 42,
     slug: "test-syntropic137",
     pem: "fake-pem-content",
@@ -48,9 +60,15 @@ vi.mock("./manifest.js", () => ({
     client_id: "Iv1.abc123",
     client_secret: "cs-secret-xyz",
     html_url: "https://github.com/settings/apps/test-syntropic137",
-  }),
-  buildManifest: vi.fn(),
-}));
+  };
+  return {
+    GitHubAppSetup: vi.fn().mockImplementation(() => ({
+      run: vi.fn().mockResolvedValue(result),
+    })),
+    runManifestFlow: vi.fn().mockResolvedValue(result),
+    buildManifest: vi.fn(),
+  };
+});
 
 import { parseArgs, runInit } from "./cli.js";
 import { confirm } from "./ui.js";
@@ -66,8 +84,13 @@ afterEach(() => {
 });
 
 describe("parseArgs", () => {
-  it("defaults to init command", () => {
+  it("defaults to menu when no command given", () => {
     const opts = parseArgs(["node", "cli"]);
+    expect(opts.command).toBe("menu");
+  });
+
+  it("recognizes explicit init command", () => {
+    const opts = parseArgs(["node", "cli", "init"]);
     expect(opts.command).toBe("init");
   });
 

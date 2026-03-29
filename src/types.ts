@@ -1,6 +1,6 @@
 /** CLI options parsed from argv. */
 export interface CliOptions {
-  command: "init" | "status" | "stop" | "start" | "logs" | "update";
+  command: "init" | "status" | "stop" | "start" | "logs" | "update" | "menu" | "help";
   org?: string;
   name?: string;
   dir?: string;
