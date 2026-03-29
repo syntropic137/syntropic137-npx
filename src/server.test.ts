@@ -109,6 +109,9 @@ describe("startCallbackServer", () => {
 
     handle.shutdown();
 
+    // Wait for the server to fully close before testing
+    await new Promise((r) => setTimeout(r, 50));
+
     // Should fail to connect after shutdown
     await expect(httpGet(port, "/callback")).rejects.toThrow();
   });
