@@ -242,7 +242,7 @@ export async function runInit(opts: CliOptions): Promise<void> {
   if (opts.skipDocker) {
     console.log();
     success("Templates written to " + installDir);
-    info("Run `cd ${installDir} && docker compose -f docker-compose.syntropic137.yaml up -d` to start.");
+    info(`Run \`cd ${installDir} && docker compose -f docker-compose.syntropic137.yaml up -d\` to start.`);
     return;
   }
 
