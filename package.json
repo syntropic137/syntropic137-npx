@@ -1,0 +1,39 @@
+{
+  "name": "syntropic137",
+  "version": "0.18.0",
+  "type": "module",
+  "description": "Zero-prereq self-host setup CLI for Syntropic137",
+  "bin": {
+    "syntropic137": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist/",
+    "templates/"
+  ],
+  "keywords": [
+    "syntropic137",
+    "self-host",
+    "docker",
+    "cli",
+    "setup"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/syntropic137/syntropic137-npx.git"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vitest": "^3.1.0",
+    "@types/node": "^18.19.0"
+  }
+}

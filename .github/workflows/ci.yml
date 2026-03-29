@@ -1,0 +1,68 @@
+# CI — runs on every PR and push to main.
+#
+# Checks:
+#   1. TypeScript strict type check
+#   2. All tests pass
+#   3. Build succeeds
+#   4. Zero runtime dependencies (supply chain security)
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ["18", "20", "22"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install dev dependencies
+        run: npm ci
+
+      - name: Type check (strict)
+        run: npx tsc --noEmit
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  zero-deps:
+    runs-on: ubuntu-latest
+    name: Zero runtime dependencies
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify no runtime dependencies
+        run: |
+          # Extract the dependencies field from package.json
+          deps=$(node -e "
+            const pkg = require('./package.json');
+            const deps = Object.keys(pkg.dependencies || {});
+            if (deps.length > 0) {
+              console.error('FAIL: Found runtime dependencies:', deps.join(', '));
+              console.error('This package must have zero runtime dependencies (stdlib only).');
+              console.error('See SECURITY.md for rationale.');
+              process.exit(1);
+            }
+            console.log('OK: Zero runtime dependencies');
+          ")
+          echo "$deps"

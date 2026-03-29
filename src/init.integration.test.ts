@@ -1,0 +1,173 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
+import * as crypto from "node:crypto";
+
+// Mock UI — silence all output, preset interactive responses
+vi.mock("./ui.js", () => ({
+  banner: vi.fn(),
+  step: vi.fn(),
+  info: vi.fn(),
+  success: vi.fn(),
+  warn: vi.fn(),
+  fail: vi.fn(),
+  bold: (s: string) => s,
+  dim: (s: string) => s,
+  green: (s: string) => s,
+  cyan: (s: string) => s,
+  setTotalSteps: vi.fn(),
+  prompt: vi.fn().mockResolvedValue(""),
+  promptSecret: vi.fn().mockResolvedValue("sk-ant-test-key-123"),
+  confirm: vi.fn().mockResolvedValue(true),
+  spinner: vi.fn(() => ({ stop: vi.fn(), update: vi.fn() })),
+}));
+
+// Mock Docker — not needed with --skip-docker but prevents accidental calls
+vi.mock("./docker.js", () => ({
+  checkDocker: vi.fn(),
+  composePull: vi.fn(),
+  composeUp: vi.fn(),
+  composeDown: vi.fn(),
+  composeStop: vi.fn(),
+  composeStart: vi.fn(),
+  composeLogs: vi.fn(),
+  composeStatus: vi.fn(),
+  composeUpdate: vi.fn(),
+  waitForHealth: vi.fn().mockResolvedValue(true),
+  parseComposeVersion: vi.fn(),
+}));
+
+// Mock manifest flow — returns fake credentials
+vi.mock("./manifest.js", () => ({
+  runManifestFlow: vi.fn().mockResolvedValue({
+    id: 42,
+    slug: "test-syntropic137",
+    pem: "fake-pem-content",
+    webhook_secret: "wh-secret-abc",
+    client_id: "Iv1.abc123",
+    client_secret: "cs-secret-xyz",
+    html_url: "https://github.com/settings/apps/test-syntropic137",
+  }),
+  buildManifest: vi.fn(),
+}));
+
+import { parseArgs, runInit } from "./cli.js";
+import { confirm } from "./ui.js";
+
+let tmpDir: string;
+
+beforeEach(() => {
+  tmpDir = path.join(os.tmpdir(), `s137-init-test-${crypto.randomUUID()}`);
+});
+
+afterEach(() => {
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+describe("parseArgs", () => {
+  it("defaults to init command", () => {
+    const opts = parseArgs(["node", "cli"]);
+    expect(opts.command).toBe("init");
+  });
+
+  it("recognizes subcommands", () => {
+    expect(parseArgs(["node", "cli", "status"]).command).toBe("status");
+    expect(parseArgs(["node", "cli", "stop"]).command).toBe("stop");
+    expect(parseArgs(["node", "cli", "start"]).command).toBe("start");
+    expect(parseArgs(["node", "cli", "logs"]).command).toBe("logs");
+    expect(parseArgs(["node", "cli", "update"]).command).toBe("update");
+  });
+
+  it("parses all flags", () => {
+    const opts = parseArgs([
+      "node", "cli", "init",
+      "--org", "myorg",
+      "--name", "myapp",
+      "--dir", "/tmp/test",
+      "--skip-github",
+      "--skip-docker",
+      "--webhook-url", "https://example.com/hook",
+    ]);
+
+    expect(opts.command).toBe("init");
+    expect(opts.org).toBe("myorg");
+    expect(opts.name).toBe("myapp");
+    expect(opts.dir).toBe("/tmp/test");
+    expect(opts.skipGithub).toBe(true);
+    expect(opts.skipDocker).toBe(true);
+    expect(opts.webhookUrl).toBe("https://example.com/hook");
+  });
+});
+
+describe("runInit --skip-docker --skip-github", () => {
+  it("creates full directory structure", async () => {
+    await runInit({ command: "init", dir: tmpDir, skipDocker: true, skipGithub: true });
+
+    expect(fs.existsSync(tmpDir)).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, "secrets"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, "init-db"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, "workspaces"))).toBe(true);
+  });
+
+  it("copies all template files", async () => {
+    await runInit({ command: "init", dir: tmpDir, skipDocker: true, skipGithub: true });
+
+    expect(fs.existsSync(path.join(tmpDir, "docker-compose.syntropic137.yaml"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, "selfhost-entrypoint.sh"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, "selfhost.env.example"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, "init-db", "01-create-databases.sql"))).toBe(true);
+  });
+
+  it("generates secret files", async () => {
+    await runInit({ command: "init", dir: tmpDir, skipDocker: true, skipGithub: true });
+
+    const secretsDir = path.join(tmpDir, "secrets");
+    expect(fs.existsSync(path.join(secretsDir, "db-password.secret"))).toBe(true);
+    expect(fs.existsSync(path.join(secretsDir, "redis-password.secret"))).toBe(true);
+    expect(fs.existsSync(path.join(secretsDir, "minio-password.secret"))).toBe(true);
+  });
+
+  it("writes .env with mode 0o600", async () => {
+    await runInit({ command: "init", dir: tmpDir, skipDocker: true, skipGithub: true });
+
+    const envPath = path.join(tmpDir, ".env");
+    expect(fs.existsSync(envPath)).toBe(true);
+    const stat = fs.statSync(envPath);
+    expect(stat.mode & 0o777).toBe(0o600);
+  });
+
+  it(".env contains APP_ENVIRONMENT=selfhost", async () => {
+    await runInit({ command: "init", dir: tmpDir, skipDocker: true, skipGithub: true });
+
+    const content = fs.readFileSync(path.join(tmpDir, ".env"), "utf-8");
+    expect(content).toContain("APP_ENVIRONMENT=selfhost");
+  });
+});
+
+describe("runInit with mocked GitHub flow", () => {
+  it("writes app ID and slug to .env", async () => {
+    await runInit({ command: "init", dir: tmpDir, skipDocker: true });
+
+    const content = fs.readFileSync(path.join(tmpDir, ".env"), "utf-8");
+    expect(content).toContain("SYN_GITHUB_APP_ID=42");
+    expect(content).toContain("SYN_GITHUB_APP_NAME=test-syntropic137");
+  });
+});
+
+describe("runInit re-run safety", () => {
+  it("detects existing .env and respects decline to reconfigure", async () => {
+    // Pre-create install dir with .env
+    fs.mkdirSync(tmpDir, { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, ".env"), "EXISTING=true");
+
+    // Mock confirm to return false (decline reconfigure)
+    vi.mocked(confirm).mockResolvedValueOnce(false);
+
+    await runInit({ command: "init", dir: tmpDir, skipDocker: true, skipGithub: true });
+
+    // Original .env should be untouched
+    const content = fs.readFileSync(path.join(tmpDir, ".env"), "utf-8");
+    expect(content).toBe("EXISTING=true");
+  });
+});

@@ -1,0 +1,60 @@
+# npm Publish — manual-only workflow for publishing to npm.
+#
+# Requires workflow_dispatch (human must click "Run workflow" in GitHub UI).
+# This is intentional for supply chain security — see SECURITY.md.
+#
+# Prerequisites:
+#   - NPM_TOKEN secret set in this repo's GitHub Actions secrets
+#   - Consider enabling npm 2FA on the syntropic137 package
+
+name: Publish to npm
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (skip actual publish)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm-publish  # Requires environment approval if configured
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dev dependencies
+        run: npm ci
+
+      - name: Type check (strict)
+        run: npx tsc --noEmit
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify package contents
+        run: npm pack --dry-run
+
+      - name: Publish
+        if: ${{ !inputs.dry_run }}
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Dry run complete
+        if: ${{ inputs.dry_run }}
+        run: echo "Dry run — skipped npm publish."
