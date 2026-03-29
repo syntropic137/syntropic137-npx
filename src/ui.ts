@@ -327,7 +327,7 @@ export function summaryBox(opts: {
   port: string;
   installDir: string;
 }): void {
-  const width = 68;
+  const width = 78;
   console.log();
   console.log(`  ${dim(BOX.tl + BOX.h.repeat(width + 2) + BOX.tr)}`);
 
@@ -344,7 +344,6 @@ export function summaryBox(opts: {
   // Show bare command for interactive menu first
   console.log(boxLine(`    ${bold(BIN.padEnd(30))}${dim("Interactive menu")}`, width));
   for (const c of COMMANDS) {
-    if (c.name === "init") continue; // skip init in post-install summary
     const cmd = `${BIN} ${c.name}`;
     console.log(boxLine(`    ${bold(cmd.padEnd(30))}${dim(c.description)}`, width));
   }

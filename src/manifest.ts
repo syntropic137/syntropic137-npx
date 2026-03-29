@@ -158,7 +158,8 @@ export class GitHubAppSetup {
   }
 
   async run(): Promise<ManifestResult> {
-    const [callbackPort, formPort] = await Promise.all([findFreePort(), findFreePort()]);
+    const callbackPort = await findFreePort();
+    const formPort = await findFreePort();
 
     const redirectUrl = `http://127.0.0.1:${callbackPort}/callback`;
     const manifest = buildManifest({
@@ -202,45 +203,48 @@ export class GitHubAppSetup {
 
     formServer.close();
 
-    // Exchange code for credentials
-    const sx = spinner("Exchanging code for credentials...");
-    const exchangeUrl = `${GITHUB_API}/app-manifests/${code}/conversions`;
-    const credentials = (await apiRequest(exchangeUrl, "POST", "")) as Record<string, string>;
-    sx.stop("Credentials received");
+    try {
+      // Exchange code for credentials
+      const sx = spinner("Exchanging code for credentials...");
+      const exchangeUrl = `${GITHUB_API}/app-manifests/${code}/conversions`;
+      const credentials = (await apiRequest(exchangeUrl, "POST", "")) as Record<string, string>;
+      sx.stop("Credentials received");
 
-    // Save credentials
-    this.secrets.savePem(credentials.pem || "");
-    this.secrets.saveWebhookSecret(credentials.webhook_secret || "");
-    this.secrets.saveClientSecret(credentials.client_secret || "");
+      // Save credentials
+      this.secrets.savePem(credentials.pem || "");
+      this.secrets.saveWebhookSecret(credentials.webhook_secret || "");
+      this.secrets.saveClientSecret(credentials.client_secret || "");
 
-    const slug = credentials.slug || this.opts.appName;
-    const settingsUrl = `${GITHUB_BASE}/settings/apps/${slug}`;
+      const slug = credentials.slug || this.opts.appName;
+      const settingsUrl = `${GITHUB_BASE}/settings/apps/${slug}`;
 
-    callbackHandle.shutdown();
 
-    // ── Success summary ───────────────────────────────────────────────
-    console.log();
-    success(`GitHub App ${bold(`'${slug}'`)} created!`);
-    console.log();
-    info(`${dim("Settings:")}  ${cyan(settingsUrl)}`);
-    info(`${dim("Tip:")}       Add a logo → ${cyan(settingsUrl)} → "Display information"`);
-    console.log();
+      // ── Success summary ───────────────────────────────────────────────
+      console.log();
+      success(`GitHub App ${bold(`'${slug}'`)} created!`);
+      console.log();
+      info(`${dim("Settings:")}  ${cyan(settingsUrl)}`);
+      info(`${dim("Tip:")}       Add a logo → ${cyan(settingsUrl)} → "Display information"`);
+      console.log();
 
-    // Open installation page
-    const installUrl = `${GITHUB_BASE}/apps/${slug}/installations/new`;
-    info(`Opening installation page...`);
-    info(`Install the app on the repos you want Syntropic137 to access.`);
-    openBrowser(installUrl);
+      // Open installation page
+      const installUrl = `${GITHUB_BASE}/apps/${slug}/installations/new`;
+      info(`Opening installation page...`);
+      info(`Install the app on the repos you want Syntropic137 to access.`);
+      openBrowser(installUrl);
 
-    return {
-      id: Number(credentials.id) || 0,
-      slug,
-      pem: credentials.pem || "",
-      webhook_secret: credentials.webhook_secret || "",
-      client_id: credentials.client_id || "",
-      client_secret: credentials.client_secret || "",
-      html_url: settingsUrl,
-    };
+      return {
+        id: Number(credentials.id) || 0,
+        slug,
+        pem: credentials.pem || "",
+        webhook_secret: credentials.webhook_secret || "",
+        client_id: credentials.client_id || "",
+        client_secret: credentials.client_secret || "",
+        html_url: settingsUrl,
+      };
+    } finally {
+      callbackHandle.shutdown();
+    }
   }
 }
 

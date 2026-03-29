@@ -44,8 +44,9 @@ export class ConfigManager {
     const templatePath = path.join(templateDir, "selfhost.env.example");
     let template = fs.readFileSync(templatePath, "utf-8");
 
-    for (const [key, value] of Object.entries(values)) {
-      if (value === undefined || value === "") continue;
+    for (const [key, rawValue] of Object.entries(values)) {
+      if (rawValue === undefined || rawValue === "") continue;
+      const value = rawValue.replace(/[\r\n]/g, "");
       const regex = new RegExp(`^(${key})=.*$`, "m");
       if (regex.test(template)) {
         template = template.replace(regex, `$1=${value}`);

@@ -21,7 +21,7 @@ export const DEFAULT_VERSION = "latest";
 // CLI command reference (single source of truth for all user-facing commands)
 // ---------------------------------------------------------------------------
 
-export const BIN = "npx syntropic137";
+export const BIN = "npx @syntropic137/setup";
 
 export interface CommandDef {
   name: string;
