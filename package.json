@@ -1,0 +1,48 @@
+{
+  "name": "@syntropic137/setup",
+  "version": "0.18.0",
+  "type": "module",
+  "description": "Zero-dependency self-host setup CLI for Syntropic137",
+  "bin": {
+    "syntropic137": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prestart": "npm run build",
+    "start": "node dist/cli.js",
+    "preinit": "npm run build",
+    "init": "node dist/cli.js init",
+    "preinit:skip-docker": "npm run build",
+    "init:skip-docker": "node dist/cli.js init --skip-docker",
+    "preinit:skip-github": "npm run build",
+    "init:skip-github": "node dist/cli.js init --skip-github",
+    "sync-templates": "./scripts/sync-templates.sh"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist/",
+    "templates/"
+  ],
+  "keywords": [
+    "syntropic137",
+    "self-host",
+    "docker",
+    "cli",
+    "setup"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/syntropic137/syntropic137-npx.git"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vitest": "^3.1.0",
+    "@types/node": "^18.19.0"
+  }
+}

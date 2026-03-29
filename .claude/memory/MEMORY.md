@@ -1,0 +1,1 @@
+- [Type safety](feedback_type_safety.md) — User requires strict TypeScript, no `any`, proper narrowing

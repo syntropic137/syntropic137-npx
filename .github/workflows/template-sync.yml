@@ -1,0 +1,79 @@
+# Template Sync — pulls updated templates from the main Syntropic137 repo.
+#
+# Triggered by:
+#   1. repository_dispatch from the main repo on release (notification)
+#   2. Manual workflow_dispatch (for ad-hoc syncs)
+#
+# This workflow opens a PR with the updated templates. It does NOT auto-merge
+# or auto-publish. A human must review and merge. See SECURITY.md.
+
+name: Template Sync
+
+on:
+  repository_dispatch:
+    types: [template-sync]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (tag/branch) in syntropic137/syntropic137 to pull from"
+        required: false
+        default: "main"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Checkout main repo templates
+        uses: actions/checkout@v4
+        with:
+          repository: syntropic137/syntropic137
+          ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+          path: _upstream
+          sparse-checkout: |
+            docker/docker-compose.syntropic137.yaml
+            docker/selfhost-entrypoint.sh
+            docker/selfhost.env.example
+            docker/init-db/01-create-databases.sql
+
+      - name: Copy templates
+        run: |
+          cp _upstream/docker/docker-compose.syntropic137.yaml templates/
+          cp _upstream/docker/selfhost-entrypoint.sh templates/
+          cp _upstream/docker/selfhost.env.example templates/
+          cp _upstream/docker/init-db/01-create-databases.sql templates/init-db/
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet templates/; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create pull request
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: chore/template-sync
+          delete-branch: true
+          title: "chore: sync templates from upstream"
+          body: |
+            Automated template sync from `syntropic137/syntropic137`.
+
+            **Source ref:** `${{ github.event.client_payload.ref || inputs.ref || 'main' }}`
+
+            Review the diff carefully before merging. See [SECURITY.md](./SECURITY.md) for context.
+          commit-message: "chore: sync templates from syntropic137/syntropic137"
+          labels: templates, automated
+
+      - name: No changes
+        if: steps.diff.outputs.changed == 'false'
+        run: echo "Templates are already up to date."
