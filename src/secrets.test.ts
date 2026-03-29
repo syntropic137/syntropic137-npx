@@ -49,7 +49,7 @@ describe("generateSecrets", () => {
     }
   });
 
-  it("does not overwrite existing files", () => {
+  it("does not overwrite existing files by default", () => {
     fs.mkdirSync(tmpDir, { recursive: true });
     const existing = path.join(tmpDir, "db-password.secret");
     fs.writeFileSync(existing, "keep-this-value");
@@ -57,6 +57,26 @@ describe("generateSecrets", () => {
     generateSecrets(tmpDir);
 
     expect(fs.readFileSync(existing, "utf-8")).toBe("keep-this-value");
+  });
+
+  it("regenerates and backs up existing files when force=true", () => {
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const existing = path.join(tmpDir, "db-password.secret");
+    fs.writeFileSync(existing, "old-secret-value", { mode: 0o600 });
+
+    generateSecrets(tmpDir, true);
+
+    // Old secret backed up
+    const bakPath = path.join(tmpDir, "db-password.secret.bak");
+    expect(fs.existsSync(bakPath)).toBe(true);
+    expect(fs.readFileSync(bakPath, "utf-8")).toBe("old-secret-value");
+    expect(fs.statSync(bakPath).mode & 0o777).toBe(0o600);
+
+    // New secret generated (different from old)
+    const newSecret = fs.readFileSync(existing, "utf-8");
+    expect(newSecret).not.toBe("old-secret-value");
+    expect(newSecret).toHaveLength(64);
+    expect(newSecret).toMatch(/^[0-9a-f]+$/);
   });
 
   it("creates empty PEM placeholder", () => {

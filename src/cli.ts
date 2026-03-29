@@ -138,6 +138,7 @@ export async function runInit(opts: CliOptions): Promise<void> {
   setTotalSteps(steps);
 
   // Re-run safety: detect existing .env
+  let reconfigure = false;
   if (envExists(installDir)) {
     warn("Existing installation detected at " + installDir);
     const proceed = await confirm("Reconfigure?", false);
@@ -145,6 +146,7 @@ export async function runInit(opts: CliOptions): Promise<void> {
       info("Skipping. Run `syntropic137 status` to check your stack.");
       return;
     }
+    reconfigure = true;
   }
 
   // ── Step 1: Check Docker ──────────────────────────────────────────────
@@ -174,7 +176,7 @@ export async function runInit(opts: CliOptions): Promise<void> {
 
   // ── Step 4: Generate secrets ──────────────────────────────────────────
   step("Generating secrets");
-  generateSecrets(secretsDir);
+  generateSecrets(secretsDir, reconfigure);
 
   // ── Step 5: Prompt for API key ────────────────────────────────────────
   step("Configuring LLM provider");

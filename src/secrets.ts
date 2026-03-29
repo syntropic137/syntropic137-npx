@@ -14,15 +14,27 @@ const SECRET_FILES = [
  * Generate cryptographically random secret files in the given directory.
  * Each file contains a 32-byte hex string (64 chars).
  * Files are chmod 600 (owner read/write only).
+ *
+ * @param force - When true, regenerate all secrets even if they already exist.
+ *                Old secrets are backed up to `<name>.bak` before overwriting
+ *                so the user can roll back if needed (e.g., database still
+ *                holds the old password).
  */
-export function generateSecrets(secretsDir: string): void {
+export function generateSecrets(secretsDir: string, force = false): void {
   fs.mkdirSync(secretsDir, { recursive: true });
 
   for (const filename of SECRET_FILES) {
     const filePath = path.join(secretsDir, filename);
     if (fs.existsSync(filePath)) {
-      info(`  ${filename} already exists, skipping`);
-      continue;
+      if (!force) {
+        info(`  ${filename} already exists, skipping`);
+        continue;
+      }
+      // Back up the old secret before overwriting
+      const bakPath = filePath + ".bak";
+      fs.copyFileSync(filePath, bakPath);
+      fs.chmodSync(bakPath, 0o600);
+      info(`  Backed up ${filename} → ${filename}.bak`);
     }
     const secret = crypto.randomBytes(32).toString("hex");
     fs.writeFileSync(filePath, secret, { mode: 0o600 });

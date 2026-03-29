@@ -10,7 +10,10 @@
     "build": "tsc",
     "prepublishOnly": "npm run build",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "init": "node dist/cli.js init",
+    "init:skip-docker": "node dist/cli.js init --skip-docker",
+    "init:skip-github": "node dist/cli.js init --skip-github"
   },
   "engines": {
     "node": ">=18.0.0"
