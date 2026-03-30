@@ -1,6 +1,6 @@
 /** CLI options parsed from argv. */
 export interface CliOptions {
-  command: "init" | "status" | "stop" | "start" | "logs" | "update" | "plugin" | "menu" | "help";
+  command: "init" | "status" | "stop" | "start" | "logs" | "update" | "plugin" | "github-app" | "menu" | "help";
   org?: string;
   name?: string;
   dir?: string;
@@ -17,6 +17,7 @@ export interface EnvValues {
   CLAUDE_CODE_OAUTH_TOKEN?: string;
   SYN_GITHUB_APP_ID?: string;
   SYN_GITHUB_APP_NAME?: string;
+  SYN_GITHUB_APP_ORG?: string;
   SYN_GITHUB_WEBHOOK_SECRET?: string;
   SYN_GATEWAY_PORT?: string;
   MINIO_ROOT_USER?: string;
