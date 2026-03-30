@@ -1,8 +1,11 @@
 # Template Sync — pulls updated templates from the main Syntropic137 repo.
 #
 # Triggered by:
-#   1. repository_dispatch from the main repo on release (notification)
+#   1. workflow_dispatch from the main repo's release workflow (via gh CLI)
 #   2. Manual workflow_dispatch (for ad-hoc syncs)
+#
+# The upstream token only needs actions:write (not contents:write), so a
+# leaked token can trigger runs but cannot push code. See SECURITY.md.
 #
 # This workflow opens a PR with the updated templates. It does NOT auto-merge
 # or auto-publish. A human must review and merge. See SECURITY.md.
@@ -10,8 +13,6 @@
 name: Template Sync
 
 on:
-  repository_dispatch:
-    types: [template-sync]
   workflow_dispatch:
     inputs:
       ref:
@@ -34,7 +35,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: syntropic137/syntropic137
-          ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+          ref: ${{ inputs.ref || 'main' }}
           path: _upstream
           sparse-checkout: |
             docker/docker-compose.syntropic137.yaml
@@ -68,7 +69,7 @@ jobs:
           body: |
             Automated template sync from `syntropic137/syntropic137`.
 
-            **Source ref:** `${{ github.event.client_payload.ref || inputs.ref || 'main' }}`
+            **Source ref:** `${{ inputs.ref || 'main' }}`
 
             Review the diff carefully before merging. See [SECURITY.md](./SECURITY.md) for context.
           commit-message: "chore: sync templates from syntropic137/syntropic137"
