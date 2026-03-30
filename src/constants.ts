@@ -44,7 +44,7 @@ export const COMMANDS: readonly CommandDef[] = [
   { name: "plugin", description: "Install or update the Claude Code plugin" },
 ] as const;
 
-/** Shorthand lookup: CMD.init → "npx syntropic137 init" */
+/** Shorthand lookup: CMD.init → "npx @syntropic137/setup init" */
 export const CMD = Object.fromEntries([
   ...COMMANDS.map((c) => [c.name, `${BIN} ${c.name}`]),
   ["skipDocker", `${BIN} init --skip-docker`],

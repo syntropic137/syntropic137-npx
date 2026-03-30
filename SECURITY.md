@@ -44,8 +44,13 @@ The CLI embeds template files (`docker-compose.syntropic137.yaml`, `selfhost-ent
 
 - Publishing requires **manual `workflow_dispatch`** trigger with approval
 - The publish workflow runs `tsc --noEmit` (strict mode) and tests before publishing
-- npm credentials are stored as GitHub Actions secrets, scoped to this repo only
-- Consider enabling npm 2FA for the `syntropic137` package
+- **Trusted Publishing (OIDC)** — no npm token stored in GitHub secrets. The npm
+  registry verifies the publish request came from this specific repo, workflow, and
+  environment via GitHub's OIDC identity provider. There is no long-lived credential
+  to steal or rotate.
+- **Provenance attestation** — every published version includes a signed provenance
+  statement linking the package back to the exact commit and workflow run that built
+  it. Users can verify this with `npm audit signatures`.
 
 ## Code Security
 
@@ -64,7 +69,7 @@ The CLI embeds template files (`docker-compose.syntropic137.yaml`, `selfhost-ent
 |--------|------------|
 | Main repo CI compromise | No npm credentials in main repo; dispatch opens PR only |
 | This repo CI compromise | npm publish requires manual approval, not auto-triggered |
-| npm credential theft | Credentials scoped to this repo; enable npm 2FA |
+| npm credential theft | No stored credentials — Trusted Publishing uses ephemeral OIDC tokens |
 | Dependency hijack | Zero runtime dependencies |
 | Template tampering via PR | Human review required on all PRs |
 | Malicious template injection | Templates are vendored snapshots, not fetched at runtime |

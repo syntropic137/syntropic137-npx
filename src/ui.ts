@@ -203,10 +203,15 @@ export function interactiveMenu(
 
     let selected = 0;
     let flairIdx = 0;
+    let hasDrawn = false;
 
     function renderItems() {
-      // Move cursor to saved position and clear everything below it
-      out.write("\x1b[u\x1b[J");
+      // On redraws, move cursor up to overwrite the previous menu
+      if (hasDrawn) {
+        out.write(`\x1b[${items.length}A`);
+      }
+      out.write("\x1b[J"); // clear from cursor down
+      hasDrawn = true;
       for (let i = 0; i < items.length; i++) {
         const item = items[i]!;
         const pointer = i === selected ? cyan("  ❯ ") : "    ";
@@ -234,9 +239,6 @@ export function interactiveMenu(
     if (title) {
       out.write(`  ${bold(title)}\n\n`);
     }
-
-    // Save cursor position — this is the anchor for all redraws
-    out.write("\x1b[s");
 
     // Hide cursor and draw initial items
     out.write("\x1b[?25l");

@@ -3,9 +3,14 @@
 # Requires workflow_dispatch (human must click "Run workflow" in GitHub UI).
 # This is intentional for supply chain security — see SECURITY.md.
 #
+# Uses npm Trusted Publishing (OIDC) — no npm token stored in GitHub secrets.
+# The npm registry verifies this workflow's identity via GitHub's OIDC provider.
+#
 # Prerequisites:
-#   - NPM_TOKEN secret set in this repo's GitHub Actions secrets
-#   - Consider enabling npm 2FA on the syntropic137 package
+#   - Configure Trusted Publisher on npmjs.com for @syntropic137/setup:
+#     repo: syntropic137/syntropic137-npx
+#     workflow: publish.yml
+#     environment: npm-publish
 
 name: Publish to npm
 
@@ -19,6 +24,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write  # Required for npm Trusted Publishing (OIDC provenance)
 
 jobs:
   publish:
@@ -49,11 +55,9 @@ jobs:
       - name: Verify package contents
         run: npm pack --dry-run
 
-      - name: Publish
+      - name: Publish with provenance
         if: ${{ !inputs.dry_run }}
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance
 
       - name: Dry run complete
         if: ${{ inputs.dry_run }}

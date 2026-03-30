@@ -1,0 +1,46 @@
+# Development
+
+## Setup
+
+```sh
+git clone https://github.com/syntropic137/syntropic137-npx.git
+cd syntropic137-npx
+npm install        # Dev deps only: typescript, vitest, @types/node
+npm run build      # tsc → dist/
+npm test           # vitest
+node dist/cli.js --help
+```
+
+TypeScript strict mode is required. No `any` types.
+
+## Source structure
+
+```
+src/
+├── cli.ts          Entry point, arg parsing, 10-step init, subcommands
+├── manifest.ts     GitHub App Manifest flow (ported from Python)
+├── server.ts       Local HTTP servers for OAuth callback + form submit
+├── docker.ts       Docker Compose lifecycle (check, pull, up, health)
+├── secrets.ts      Cryptographic secret generation
+├── config.ts       .env template rendering
+├── constants.ts    Shared constants (paths, defaults, command definitions)
+├── ui.ts           ANSI colors, spinner, prompts (stdlib only)
+└── types.ts        Shared TypeScript types
+```
+
+## Template sync
+
+The `templates/` directory contains files vendored from the main [syntropic137/syntropic137](https://github.com/syntropic137/syntropic137) repo. When a new platform version is released:
+
+1. The main repo sends a `repository_dispatch` to this repo (notification only)
+2. The `template-sync.yml` workflow opens a PR with the updated templates
+3. A human reviews and merges the PR
+4. A human triggers the `publish.yml` workflow to publish to npm
+
+The main repo cannot merge PRs or publish to npm. See [SECURITY.md](../SECURITY.md) for why this matters.
+
+## Related docs
+
+- [Releasing](./releasing.md) — version bumping and npm publish workflow
+- [Repository setup](./repository-setup.md) — secrets, branch protection, and upstream dispatch
+- [Security](../SECURITY.md) — threat model and design decisions

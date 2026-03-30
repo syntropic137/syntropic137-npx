@@ -3,10 +3,10 @@
 This is a **helper package** for the [syntropic137/syntropic137](https://github.com/syntropic137/syntropic137) platform. Its sole purpose is to make deploying, starting, and managing the Syntropic137 self-hosted stack frictionless for users. Instead of cloning the main repo, installing Python, uv, and just, users run one command:
 
 ```
-npx syntropic137 init
+npx @syntropic137/setup init
 ```
 
-This repo publishes the `syntropic137` npm package. It lives in a separate repository (`syntropic137/syntropic137-npx`) from the main platform for supply chain security reasons — see [SECURITY.md](./SECURITY.md).
+This repo publishes the `@syntropic137/setup` npm package. It lives in a separate repository (`syntropic137/syntropic137-npx`) from the main platform for supply chain security reasons — see [SECURITY.md](./SECURITY.md).
 
 Tracks: syntropic137/syntropic137#387
 
