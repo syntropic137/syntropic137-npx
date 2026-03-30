@@ -41,6 +41,8 @@ import {
   CLAUDE_PLUGIN_REPO,
   CLAUDE_PLUGIN_NAME,
   CLAUDE_PLUGIN_FULL,
+  GITHUB_BASE,
+  GITHUB_SLUG_RE,
 } from "./constants.js";
 
 // ---------------------------------------------------------------------------
@@ -396,14 +398,24 @@ export class CLI {
       process.exit(1);
     }
 
+    if (!GITHUB_SLUG_RE.test(slug)) {
+      fail(`Invalid GitHub App slug: ${slug}`);
+      process.exit(1);
+    }
+
     const org = this.opts.org || env.SYN_GITHUB_APP_ORG;
+    if (org && !GITHUB_SLUG_RE.test(org)) {
+      fail(`Invalid GitHub org name: ${org}`);
+      process.exit(1);
+    }
+
     const settingsBase = org
-      ? `https://github.com/organizations/${org}/settings/apps/${slug}`
-      : `https://github.com/settings/apps/${slug}`;
+      ? `${GITHUB_BASE}/organizations/${org}/settings/apps/${slug}`
+      : `${GITHUB_BASE}/settings/apps/${slug}`;
     const pages: MenuItem[] = [
       { label: "General settings",  value: settingsBase,                  description: "Logo, name, description, callback URLs" },
       { label: "Permissions",       value: `${settingsBase}/permissions`, description: "Repository and org permissions" },
-      { label: "Installations",     value: `https://github.com/apps/${slug}/installations/new`, description: "Add or manage repo access" },
+      { label: "Installations",     value: `${GITHUB_BASE}/apps/${slug}/installations/new`, description: "Add or manage repo access" },
     ];
 
     info(`GitHub App: ${bold(slug)}`);

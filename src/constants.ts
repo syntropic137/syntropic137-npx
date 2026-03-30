@@ -90,6 +90,7 @@ export const CLAUDE_PLUGIN_FULL = "syntropic137@syntropic137";
 // ---------------------------------------------------------------------------
 
 export const GITHUB_BASE = "https://github.com";
+export const GITHUB_SLUG_RE = /^[a-zA-Z0-9-]+$/;
 export const GITHUB_API = "https://api.github.com";
 export const PROJECT_URL = "https://github.com/syntropic137/syntropic137";
 
