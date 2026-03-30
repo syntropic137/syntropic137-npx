@@ -61,6 +61,7 @@ Every published version includes a provenance attestation linking it to the exac
 If the GitHub environment isn't set up yet, you can publish from your local machine:
 
 ```sh
+npm login --scope=@syntropic137   # required once — authenticates with the scoped org
 npm run build && npm test && npm publish --access public
 ```
 
