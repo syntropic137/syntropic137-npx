@@ -9,9 +9,9 @@ can trigger runs but cannot push code or modify releases. See [SECURITY.md](../.
 
 ## Required Setup
 
-1. Create a fine-grained PAT with **`actions:write`** scope on
-   `syntropic137/syntropic137-npx` only
-2. Add it as a secret `NPX_DISPATCH_TOKEN` in the main repo
+1. Create a fine-grained PAT scoped to `syntropic137/syntropic137-npx` only
+2. Grant **`Actions: Read and write`** permission
+3. Add it as a secret `NPX_DISPATCH_TOKEN` in the main repo
 
 ## Workflow Step
 

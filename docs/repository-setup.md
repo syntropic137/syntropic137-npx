@@ -8,13 +8,12 @@ Only one GitHub Actions secret is required. npm publishing uses Trusted Publishi
 
 | Secret | Repo | Purpose |
 |--------|------|---------|
-| `NPX_DISPATCH_TOKEN` | **main repo** (`syntropic137/syntropic137`) | Fine-grained PAT (or GitHub App token) with `contents:write` on `syntropic137/syntropic137-npx` only. Used to send `repository_dispatch` events that trigger template sync PRs. |
+| `NPX_DISPATCH_TOKEN` | **main repo** (`syntropic137/syntropic137`) | Fine-grained PAT scoped to `syntropic137/syntropic137-npx` only, with `Actions: Read and write`. Used to trigger `workflow_dispatch` events via `gh workflow run` that start template sync PRs. |
 
-> **Why does the dispatch token need `contents:write`?** The GitHub `repository_dispatch`
-> API requires write access to the target repo's contents. This scope is broader than
-> ideal — it technically allows pushing to unprotected branches. GitHub does not offer
-> a narrower scope for dispatch-only access. **Branch protection on `main` is the actual
-> guardrail** — see below.
+> **Why `Actions: Read and write`?** The dispatch uses `gh workflow run` (workflow_dispatch),
+> not `repository_dispatch`. This only requires `Actions` permission — no `contents:write`
+> needed. The token can trigger workflow runs but cannot push code, merge PRs, or modify
+> releases.
 
 ### npm Trusted Publishing
 
@@ -41,11 +40,12 @@ This ensures that even automated PRs (like template sync) require a human code o
 
 ### Why this matters for the dispatch token
 
-The `NPX_DISPATCH_TOKEN` has `contents:write` which could push to branches. With branch protection configured:
+The `NPX_DISPATCH_TOKEN` only has `Actions: Read and write` — it can trigger workflow
+runs but cannot push code or open PRs directly. With branch protection configured:
 
-- The token **can** push to feature branches and open PRs
+- The token **can** trigger workflow runs (template sync)
+- The token **cannot** push to any branch — no `contents:write`
 - The token **cannot** merge to `main` — requires code owner approval
-- The token **cannot** bypass branch protection — even admin bypass is disabled
 - The token **cannot** trigger npm publish — that requires a separate `workflow_dispatch`
 
 ## Upstream dispatch (connecting the main repo)
@@ -54,19 +54,9 @@ When the main platform repo cuts a release, it notifies this repo to sync templa
 
 ### Setup in the main repo
 
-1. Create the `NPX_DISPATCH_TOKEN` fine-grained PAT with `contents:write` scoped to `syntropic137/syntropic137-npx` only
-2. Add it as a secret in the main repo (`syntropic137/syntropic137`)
-3. Add this step to the release workflow (e.g. `.github/workflows/release.yml`):
-
-```yaml
-- name: Notify CLI repo to sync templates
-  uses: peter-evans/repository-dispatch@v3
-  with:
-    token: ${{ secrets.NPX_DISPATCH_TOKEN }}
-    repository: syntropic137/syntropic137-npx
-    event-type: template-sync
-    client-payload: '{"ref": "${{ github.ref_name }}"}'
-```
+1. Create a fine-grained PAT scoped to `syntropic137/syntropic137-npx` only with `Actions: Read and write` permission
+2. Add it as a secret `NPX_DISPATCH_TOKEN` in the main repo (`syntropic137/syntropic137`)
+3. The release workflow (`release-containers.yaml`) already includes a step that runs `gh workflow run template-sync.yml` — see [UPSTREAM_DISPATCH.md](../.github/UPSTREAM_DISPATCH.md) for the snippet
 
 This sends the release tag as `ref` so the CLI repo pulls templates from the exact tagged commit, not HEAD.
 

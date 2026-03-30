@@ -26,7 +26,7 @@ The CLI embeds template files (`docker-compose.syntropic137.yaml`, `selfhost-ent
 
 ### How templates are updated
 
-1. The main repo fires a `repository_dispatch` event on release (notification only)
+1. The main repo triggers a `workflow_dispatch` via `gh workflow run` on release (notification only)
 2. A workflow **in this repo** pulls the latest templates from the main repo's tagged release
 3. It opens a **pull request** — a human must review and merge
 4. npm publish is a **separate manual step** (requires `workflow_dispatch` approval)

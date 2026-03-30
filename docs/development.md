@@ -32,7 +32,7 @@ src/
 
 The `templates/` directory contains files vendored from the main [syntropic137/syntropic137](https://github.com/syntropic137/syntropic137) repo. When a new platform version is released:
 
-1. The main repo sends a `repository_dispatch` to this repo (notification only)
+1. The main repo triggers a `workflow_dispatch` via `gh workflow run` (notification only)
 2. The `template-sync.yml` workflow opens a PR with the updated templates
 3. A human reviews and merges the PR
 4. A human triggers the `publish.yml` workflow to publish to npm
