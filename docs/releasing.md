@@ -4,7 +4,7 @@ This is the workflow for publishing a new version of the CLI to npm.
 
 ## When a new platform version is released
 
-1. A release on [syntropic137/syntropic137](https://github.com/syntropic137/syntropic137) fires a `repository_dispatch` to this repo
+1. A release on [syntropic137/syntropic137](https://github.com/syntropic137/syntropic137) triggers a `workflow_dispatch` to this repo
 2. The **template-sync** workflow runs automatically and opens a PR with updated templates (compose file, entrypoint, env template, init SQL)
 3. Review the PR — check the diff against the release notes to make sure the template changes are expected
 4. Merge the PR

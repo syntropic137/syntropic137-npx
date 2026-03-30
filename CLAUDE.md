@@ -14,7 +14,7 @@ Tracks: syntropic137/syntropic137#387
 
 - **This repo does NOT contain the platform.** It only contains the CLI that sets up and manages the platform.
 - **Templates come from the main repo.** The `templates/` directory contains files vendored from `syntropic137/syntropic137`'s `docker/` directory (compose file, entrypoint, env template, init SQL). These are the files that define the actual stack.
-- **Template sync is automated but publishing is manual.** When the main repo cuts a release, a `repository_dispatch` triggers a PR here with updated templates. A human reviews, merges, and then manually triggers the npm publish workflow. The main repo cannot merge or publish — see SECURITY.md.
+- **Template sync is automated but publishing is manual.** When the main repo cuts a release, a `workflow_dispatch` triggers a PR here with updated templates. A human reviews, merges, and then manually triggers the npm publish workflow. The main repo cannot merge or publish — see SECURITY.md.
 - **The GitHub App Manifest flow was ported from `infra/scripts/github_manifest.py`** in the main repo. If permissions or events change upstream, this file (`src/manifest.ts`) needs to be updated to match.
 - **Installation IDs are not stored.** The platform resolves them dynamically per-repo at runtime since the GitHub App can be installed across multiple orgs.
 

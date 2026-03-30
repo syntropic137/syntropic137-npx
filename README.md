@@ -109,13 +109,14 @@ Optional: Cloudflare Tunnel (set `COMPOSE_PROFILES=tunnel` in `.env` for remote 
 
 ## Security
 
-See [SECURITY.md](./SECURITY.md) for the full threat model. Key points:
+This repo is the supply chain entry point for every `npx @syntropic137/setup` user. It is deliberately isolated from the main platform repo. See [SECURITY.md](./SECURITY.md) for the full threat model.
 
 - **Zero runtime dependencies** — Node 18+ stdlib only. Nothing to hijack in the dependency tree.
-- **Separate repo from the platform** — compromising the main Syntropic137 repo does not grant npm access.
-- **Trusted Publishing** — npm releases use OIDC provenance, not stored tokens. Every published version is cryptographically linked to the exact commit and workflow that built it.
-- **Secrets never in .env** — passwords and keys are stored as separate files (chmod 600) and mounted as Docker secrets (tmpfs).
-- **No auto-publish** — npm releases require manual approval via `workflow_dispatch`.
+- **Separate repo from the platform** — compromising the main Syntropic137 repo does not grant npm publish access. The cross-repo dispatch token can trigger workflow runs here but cannot push code, merge PRs, or alter what gets published.
+- **Publish only deploys reviewed code** — npm publish deploys whatever is on `main`. Since the dispatch token has no write access to repository contents, it cannot inject malicious code into the publish pipeline. The only path to `main` is through a human-reviewed PR.
+- **Trusted Publishing (OIDC)** — no npm token is stored anywhere. Every published version includes a signed [provenance attestation](https://docs.npmjs.com/generating-provenance-statements) linking it to the exact commit and workflow run. Verify with `npm audit signatures`.
+- **Secrets never in .env** — passwords and keys are stored as separate files (chmod 600) and mounted as Docker secrets (tmpfs-backed, never on the container filesystem).
+- **No auto-publish** — npm releases require a manual `workflow_dispatch` trigger. Template syncs from upstream open a PR but never auto-merge or auto-publish.
 
 ## Contributing
 

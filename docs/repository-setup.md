@@ -8,13 +8,12 @@ Only one GitHub Actions secret is required. npm publishing uses Trusted Publishi
 
 | Secret | Repo | Purpose |
 |--------|------|---------|
-| `NPX_DISPATCH_TOKEN` | **main repo** (`syntropic137/syntropic137`) | Fine-grained PAT (or GitHub App token) with `contents:write` on `syntropic137/syntropic137-npx` only. Used to send `repository_dispatch` events that trigger template sync PRs. |
+| `NPX_DISPATCH_TOKEN` | **main repo** (`syntropic137/syntropic137`) | Fine-grained PAT scoped to `syntropic137/syntropic137-npx` only, with `Actions: Read and write`. Used to trigger `workflow_dispatch` events via `gh workflow run` that start template sync PRs. |
 
-> **Why does the dispatch token need `contents:write`?** The GitHub `repository_dispatch`
-> API requires write access to the target repo's contents. This scope is broader than
-> ideal — it technically allows pushing to unprotected branches. GitHub does not offer
-> a narrower scope for dispatch-only access. **Branch protection on `main` is the actual
-> guardrail** — see below.
+> **Why `Actions: Read and write`?** The dispatch uses `gh workflow run` (workflow_dispatch),
+> not `repository_dispatch`. This only requires `Actions` permission — no `contents:write`
+> needed. The token can trigger workflow runs but cannot push code, merge PRs, or modify
+> releases.
 
 ### npm Trusted Publishing
 
@@ -22,7 +21,10 @@ Instead of storing an npm token, the publish workflow authenticates via OIDC. Th
 
 ### Additional hardening
 
-- Create a **`npm-publish` environment** in this repo's GitHub settings with required reviewers — this adds an approval gate before the publish workflow can run
+- Create a **`npm-publish` environment** in this repo's GitHub settings:
+  - **Deployment branch restriction**: only allow `main` — ensures publish always deploys reviewed code
+  - **Wait timer** (e.g. 30 minutes): gives you time to notice and cancel a rogue publish run
+  - **Required reviewers** (if you have multiple maintainers): adds an approval gate before publish
 
 ## Branch protection and code owners
 
@@ -41,32 +43,25 @@ This ensures that even automated PRs (like template sync) require a human code o
 
 ### Why this matters for the dispatch token
 
-The `NPX_DISPATCH_TOKEN` has `contents:write` which could push to branches. With branch protection configured:
+The `NPX_DISPATCH_TOKEN` only has `Actions: Read and write` — it can trigger workflow
+runs but cannot push code or open PRs directly. With branch protection configured:
 
-- The token **can** push to feature branches and open PRs
+- The token **can** trigger any `workflow_dispatch` workflow (template sync *and* publish)
+- The token **cannot** push to any branch — no `contents:write`
 - The token **cannot** merge to `main` — requires code owner approval
-- The token **cannot** bypass branch protection — even admin bypass is disabled
-- The token **cannot** trigger npm publish — that requires a separate `workflow_dispatch`
+- Even if publish is triggered, it deploys what's on `main` — code you already reviewed
+- With a **deployment branch restriction** on `npm-publish`, publish is locked to `main`
+- With a **wait timer**, you have time to cancel a rogue publish run
 
 ## Upstream dispatch (connecting the main repo)
 
-When the main platform repo cuts a release, it notifies this repo to sync templates. This is a one-way notification — the main repo can open a PR here, but cannot merge it or publish to npm.
+When the main platform repo cuts a release, it notifies this repo to sync templates. This is a one-way notification — the main repo triggers a workflow that opens a PR here, but the dispatch token itself cannot push code, merge PRs, or publish to npm with new content.
 
 ### Setup in the main repo
 
-1. Create the `NPX_DISPATCH_TOKEN` fine-grained PAT with `contents:write` scoped to `syntropic137/syntropic137-npx` only
-2. Add it as a secret in the main repo (`syntropic137/syntropic137`)
-3. Add this step to the release workflow (e.g. `.github/workflows/release.yml`):
-
-```yaml
-- name: Notify CLI repo to sync templates
-  uses: peter-evans/repository-dispatch@v3
-  with:
-    token: ${{ secrets.NPX_DISPATCH_TOKEN }}
-    repository: syntropic137/syntropic137-npx
-    event-type: template-sync
-    client-payload: '{"ref": "${{ github.ref_name }}"}'
-```
+1. Create a fine-grained PAT scoped to `syntropic137/syntropic137-npx` only with `Actions: Read and write` permission
+2. Add it as a secret `NPX_DISPATCH_TOKEN` in the main repo (`syntropic137/syntropic137`)
+3. The release workflow (`release-containers.yaml`) already includes a step that runs `gh workflow run template-sync.yml` — see [UPSTREAM_DISPATCH.md](../.github/UPSTREAM_DISPATCH.md) for the snippet
 
 This sends the release tag as `ref` so the CLI repo pulls templates from the exact tagged commit, not HEAD.
 
@@ -79,9 +74,15 @@ This sends the release tag as `ref` so the CLI repo pulls templates from the exa
 
 ### Why this is safe even if the main repo is compromised
 
-- The dispatch token can only open PRs — it cannot merge them or trigger npm publish
+- The dispatch token can trigger workflows but **cannot push code** — no `contents:write`
+- Template sync opens a PR via the workflow's `GITHUB_TOKEN`, not the dispatch token
 - CODEOWNERS + branch protection require human approval before merge
-- npm publish is a separate `workflow_dispatch` that requires manual trigger
+- Even if the dispatch token triggers `publish.yml`, it publishes what's on `main` — code you already reviewed and merged
 - Templates are vendored at build time, never fetched at runtime — what ships in the package is exactly what was reviewed
+
+> **Solo dev note:** GitHub doesn't allow you to approve your own PRs, so the
+> `npm-publish` required reviewers gate doesn't work for single-maintainer repos.
+> Use **deployment branch restrictions** (only `main`) and a **wait timer** instead.
+> This ensures publish only deploys reviewed code and gives you time to cancel rogue runs.
 
 See also: [UPSTREAM_DISPATCH.md](../.github/UPSTREAM_DISPATCH.md) for the raw workflow snippet.
