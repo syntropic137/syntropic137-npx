@@ -17,13 +17,17 @@ Only one GitHub Actions secret is required. npm publishing uses Trusted Publishi
 
 ### npm Trusted Publishing
 
-Instead of storing an npm token, the publish workflow authenticates via OIDC. The npm registry verifies the request came from this specific repo, workflow, and environment. Configure on npmjs.com under `@syntropic137/setup` → Settings → Publishing access → Trusted Publisher.
+Instead of storing an npm token, the publish workflow authenticates via OIDC. The npm registry verifies the request came from this specific repo, workflow, and environment.
 
-### Additional hardening
+**Both of the following are required** for the publish workflow to work:
 
-- Create a **`npm-publish` environment** in this repo's GitHub settings:
-  - **Deployment branch restriction**: only allow `main` — ensures publish always deploys reviewed code
-  - **Wait timer** (e.g. 30 minutes): gives you time to notice and cancel a rogue publish run
+1. **Create an `npm-publish` environment** in GitHub: Settings → Environments → New environment → `npm-publish`. The publish workflow references this environment — it will fail without it. See [releasing.md](./releasing.md#1-create-the-npm-publish-github-environment) for recommended protections.
+2. **Configure Trusted Publisher** on npmjs.com: `@syntropic137/setup` → Settings → Publishing access → add repo `syntropic137/syntropic137-npx`, workflow `publish.yml`, environment `npm-publish`.
+
+### Additional hardening (on the `npm-publish` environment)
+
+- **Deployment branch restriction**: only allow `main` — ensures publish always deploys reviewed code
+- **Wait timer** (e.g. 30 minutes): gives you time to notice and cancel a rogue publish run
   - **Required reviewers** (if you have multiple maintainers): adds an approval gate before publish
 
 ## Branch protection and code owners

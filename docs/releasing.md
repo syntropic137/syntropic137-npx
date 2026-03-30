@@ -33,12 +33,37 @@ The CLI version does not need to match the platform version. They have independe
 
 ## First-time setup
 
-Publishing uses [npm Trusted Publishing](https://docs.npmjs.com/generating-provenance-statements) (OIDC) — no npm token is stored in GitHub secrets.
+Publishing uses [npm Trusted Publishing](https://docs.npmjs.com/generating-provenance-statements) (OIDC) — no npm token is stored in GitHub secrets. Both steps below are **required** for the publish workflow to succeed.
 
-1. On npmjs.com, go to `@syntropic137/setup` → Settings → Publishing access
-2. Add a Trusted Publisher: repo `syntropic137/syntropic137-npx`, workflow `publish.yml`, environment `npm-publish`
-3. Optionally create a `npm-publish` environment in GitHub with required reviewers for an extra approval gate
+### 1. Create the `npm-publish` GitHub environment
+
+The publish workflow references `environment: npm-publish`. GitHub Actions will fail if this environment doesn't exist.
+
+1. Go to **Settings → Environments → New environment**
+2. Name it exactly `npm-publish`
+3. Configure protections:
+   - **Deployment branches**: select "Selected branches" → add `main` (prevents publishing from feature branches)
+   - **Wait timer** (recommended): set to 5–30 minutes to give yourself time to cancel a rogue publish
+   - **Required reviewers**: add reviewers if you have multiple maintainers (not possible for solo devs — GitHub doesn't allow self-approval)
+
+### 2. Configure Trusted Publisher on npmjs.com
+
+1. Go to `@syntropic137/setup` → Settings → Publishing access
+2. Add a Trusted Publisher with these exact values:
+   - **Repository**: `syntropic137/syntropic137-npx`
+   - **Workflow**: `publish.yml`
+   - **Environment**: `npm-publish`
 
 Every published version includes a provenance attestation linking it to the exact commit and workflow run. Users can verify with `npm audit signatures`.
+
+### Publishing locally (alternative)
+
+If the GitHub environment isn't set up yet, you can publish from your local machine:
+
+```sh
+npm run build && npm test && npm publish --access public
+```
+
+Note: local publishes don't include provenance attestations (those require GitHub Actions OIDC).
 
 See [repository-setup.md](./repository-setup.md) for the full branch protection and upstream dispatch configuration.

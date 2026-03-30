@@ -1,6 +1,6 @@
 {
   "name": "@syntropic137/setup",
-  "version": "0.18.2",
+  "version": "0.18.3",
   "type": "module",
   "description": "Zero-dependency self-host setup CLI for Syntropic137",
   "bin": {
