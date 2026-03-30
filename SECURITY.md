@@ -33,10 +33,16 @@ The CLI embeds template files (`docker-compose.syntropic137.yaml`, `selfhost-ent
 
 ### What this prevents
 
-- **Main repo compromise ≠ npm compromise** — the dispatch can trigger a PR, but
-  cannot merge it or publish to npm. There are no shared credentials.
+- **Main repo compromise ≠ npm compromise** — the dispatch token can trigger workflow
+  runs but cannot push code (`contents:write` is not granted). Template sync PRs are
+  created by the workflow's `GITHUB_TOKEN`, not the dispatch token.
+- **Publish only deploys reviewed code** — even if the dispatch token triggers
+  `publish.yml`, it publishes whatever is on `main`. Since the token cannot push to
+  any branch, it cannot get malicious code into the publish pipeline. The real attack
+  vector is social engineering (tricking a maintainer into merging a malicious
+  template-sync PR), not token exploitation.
 - **No auto-publish** — even if a malicious PR is opened via dispatch, it requires
-  human review before merge, and a separate human approval before npm publish.
+  human review before merge, and a separate `workflow_dispatch` before npm publish.
 - **No runtime fetching** — the CLI never downloads templates at runtime. What ships
   in the npm package is what users get. The package is a static, auditable snapshot.
 
@@ -67,8 +73,9 @@ The CLI embeds template files (`docker-compose.syntropic137.yaml`, `selfhost-ent
 
 | Threat | Mitigation |
 |--------|------------|
-| Main repo CI compromise | No npm credentials in main repo; dispatch opens PR only |
-| This repo CI compromise | npm publish requires manual approval, not auto-triggered |
+| Main repo CI compromise | No npm credentials in main repo; dispatch token can trigger workflows but cannot push code — publish only deploys what's on `main` |
+| Dispatch token leak | Token can trigger workflow runs but cannot push code; publish deploys existing `main` content; wait timer gives time to cancel |
+| This repo CI compromise | npm publish requires manual `workflow_dispatch`, not auto-triggered |
 | npm credential theft | No stored credentials — Trusted Publishing uses ephemeral OIDC tokens |
 | Dependency hijack | Zero runtime dependencies |
 | Template tampering via PR | Human review required on all PRs |

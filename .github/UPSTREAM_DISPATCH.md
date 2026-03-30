@@ -3,9 +3,12 @@
 Add this step to the release workflow in `syntropic137/syntropic137` to notify
 this CLI repo when a new platform release is tagged.
 
-This only triggers a workflow run in the CLI repo — it cannot merge or publish.
-The token only needs `actions:write` (not `contents:write`), so a leaked token
-can trigger runs but cannot push code or modify releases. See [SECURITY.md](../../SECURITY.md).
+This only triggers a workflow run in the CLI repo — it cannot merge or push code.
+The token only needs `Actions: Read and write` (not `contents:write`), so a leaked
+token can trigger workflow runs but cannot push code or modify releases. Note: the
+token *can* trigger any workflow_dispatch workflow (including publish), but publish
+only deploys what's on `main` — and the token cannot push to `main`. See
+[SECURITY.md](../../SECURITY.md).
 
 ## Required Setup
 
