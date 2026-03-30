@@ -507,8 +507,12 @@ async function main(): Promise<void> {
   await new CLI(process.argv).run();
 }
 
-// Guard: skip auto-run when loaded as a module (e.g. vitest)
-const isDirectRun = process.argv[1]?.endsWith("cli.js") ?? false;
+// Guard: skip auto-run when loaded as a module (e.g. vitest).
+// When run via npx, argv[1] is the bin symlink (e.g. .bin/syntropic137),
+// not cli.js — so we check for both.
+const entryArg = process.argv[1] ?? "";
+const isDirectRun =
+  entryArg.endsWith("cli.js") || entryArg.endsWith("syntropic137");
 if (isDirectRun) {
   main().catch((err) => {
     fail(err instanceof Error ? err.message : String(err));
