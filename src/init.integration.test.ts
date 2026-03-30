@@ -65,6 +65,7 @@ vi.mock("./manifest.js", () => {
     GitHubAppSetup: vi.fn().mockImplementation(() => ({
       run: vi.fn().mockResolvedValue(result),
     })),
+    openBrowser: vi.fn(),
     runManifestFlow: vi.fn().mockResolvedValue(result),
     buildManifest: vi.fn(),
   };
@@ -72,6 +73,7 @@ vi.mock("./manifest.js", () => {
 
 import { parseArgs, runInit } from "./cli.js";
 import { confirm } from "./ui.js";
+import { GITHUB_SLUG_RE } from "./constants.js";
 
 let tmpDir: string;
 
@@ -100,6 +102,8 @@ describe("parseArgs", () => {
     expect(parseArgs(["node", "cli", "start"]).command).toBe("start");
     expect(parseArgs(["node", "cli", "logs"]).command).toBe("logs");
     expect(parseArgs(["node", "cli", "update"]).command).toBe("update");
+    expect(parseArgs(["node", "cli", "plugin"]).command).toBe("plugin");
+    expect(parseArgs(["node", "cli", "github-app"]).command).toBe("github-app");
   });
 
   it("parses all flags", () => {
@@ -192,5 +196,21 @@ describe("runInit re-run safety", () => {
     // Original .env should be untouched
     const content = fs.readFileSync(path.join(tmpDir, ".env"), "utf-8");
     expect(content).toBe("EXISTING=true");
+  });
+});
+
+describe("GITHUB_SLUG_RE", () => {
+  it("accepts valid GitHub slugs", () => {
+    expect(GITHUB_SLUG_RE.test("syntropic137")).toBe(true);
+    expect(GITHUB_SLUG_RE.test("my-app")).toBe(true);
+    expect(GITHUB_SLUG_RE.test("App123")).toBe(true);
+  });
+
+  it("rejects slugs with unsafe characters", () => {
+    expect(GITHUB_SLUG_RE.test("foo&bar")).toBe(false);
+    expect(GITHUB_SLUG_RE.test("foo|bar")).toBe(false);
+    expect(GITHUB_SLUG_RE.test("foo bar")).toBe(false);
+    expect(GITHUB_SLUG_RE.test("foo;rm -rf")).toBe(false);
+    expect(GITHUB_SLUG_RE.test("")).toBe(false);
   });
 });

@@ -26,7 +26,7 @@ import type { MenuItem } from "./ui.js";
 import { checkDocker, DockerService } from "./docker.js";
 import { SecretsManager } from "./secrets.js";
 import { ConfigManager } from "./config.js";
-import { GitHubAppSetup } from "./manifest.js";
+import { GitHubAppSetup, openBrowser } from "./manifest.js";
 import {
   DEFAULT_INSTALL_DIR,
   DEFAULT_APP_NAME,
@@ -41,6 +41,8 @@ import {
   CLAUDE_PLUGIN_REPO,
   CLAUDE_PLUGIN_NAME,
   CLAUDE_PLUGIN_FULL,
+  GITHUB_BASE,
+  GITHUB_SLUG_RE,
 } from "./constants.js";
 
 // ---------------------------------------------------------------------------
@@ -192,6 +194,9 @@ export class InitFlow {
 
           envValues.SYN_GITHUB_APP_ID = String(result.id);
           envValues.SYN_GITHUB_APP_NAME = result.slug;
+          if (org) {
+            envValues.SYN_GITHUB_APP_ORG = org;
+          }
           if (result.webhook_secret) {
             envValues.SYN_GITHUB_WEBHOOK_SECRET = result.webhook_secret;
           }
@@ -361,6 +366,10 @@ export class CLI {
       case "plugin":
         CLI.pluginSync();
         break;
+
+      case "github-app":
+        await this.githubApp(dir);
+        break;
     }
   }
 
@@ -373,6 +382,49 @@ export class CLI {
 
     const installed = InitFlow.isPluginInstalled();
     InitFlow.syncPlugin(installed);
+  }
+
+  // ── GitHub App management ────────────────────────────────────────────
+
+  private async githubApp(dir: string): Promise<void> {
+    const installDir = this.resolveDir(dir);
+    const config = new ConfigManager(installDir);
+    const env = config.readEnv();
+    const slug = env.SYN_GITHUB_APP_NAME;
+
+    if (!slug) {
+      fail("No GitHub App configured.");
+      info(`Run \`${CMD.init}\` to create one, or set SYN_GITHUB_APP_NAME in .env.`);
+      process.exit(1);
+    }
+
+    if (!GITHUB_SLUG_RE.test(slug)) {
+      fail(`Invalid GitHub App slug: ${slug}`);
+      process.exit(1);
+    }
+
+    const org = this.opts.org || env.SYN_GITHUB_APP_ORG;
+    if (org && !GITHUB_SLUG_RE.test(org)) {
+      fail(`Invalid GitHub org name: ${org}`);
+      process.exit(1);
+    }
+
+    const settingsBase = org
+      ? `${GITHUB_BASE}/organizations/${org}/settings/apps/${slug}`
+      : `${GITHUB_BASE}/settings/apps/${slug}`;
+    const pages: MenuItem[] = [
+      { label: "General settings",  value: settingsBase,                  description: "Logo, name, description, callback URLs" },
+      { label: "Permissions",       value: `${settingsBase}/permissions`, description: "Repository and org permissions" },
+      { label: "Installations",     value: `${GITHUB_BASE}/apps/${slug}/installations/new`, description: "Add or manage repo access" },
+    ];
+
+    info(`GitHub App: ${bold(slug)}`);
+    console.log();
+
+    const url = await interactiveMenu(pages, "What would you like to open?");
+    console.log();
+    info(`Opening ${cyan(url)}`);
+    openBrowser(url);
   }
 
   // ── Interactive menu ──────────────────────────────────────────────────
@@ -410,7 +462,7 @@ export class CLI {
       process.exit(0);
     }
 
-    const subcommands = ["init", "status", "stop", "start", "logs", "update", "help"] as const;
+    const subcommands = ["init", "status", "stop", "start", "logs", "update", "plugin", "github-app", "help"] as const;
     type Subcommand = (typeof subcommands)[number];
     const firstArg = args[0];
     let command: CliOptions["command"] = "menu";

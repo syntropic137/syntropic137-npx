@@ -42,6 +42,7 @@ export const COMMANDS: readonly CommandDef[] = [
   { name: "logs",   description: "Tail container logs" },
   { name: "update", description: "Pull latest images and restart" },
   { name: "plugin", description: "Install or update the Claude Code plugin" },
+  { name: "github-app", description: "Open GitHub App settings in your browser" },
 ] as const;
 
 /** Shorthand lookup: CMD.init → "npx @syntropic137/setup init" */
@@ -89,6 +90,7 @@ export const CLAUDE_PLUGIN_FULL = "syntropic137@syntropic137";
 // ---------------------------------------------------------------------------
 
 export const GITHUB_BASE = "https://github.com";
+export const GITHUB_SLUG_RE = /^[a-zA-Z0-9-]+$/;
 export const GITHUB_API = "https://api.github.com";
 export const PROJECT_URL = "https://github.com/syntropic137/syntropic137";
 

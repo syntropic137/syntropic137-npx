@@ -118,7 +118,7 @@ function apiRequest(url: string, method = "POST", data?: string): Promise<Record
 // Browser open (cross-platform, best-effort)
 // ---------------------------------------------------------------------------
 
-function openBrowser(url: string): void {
+export function openBrowser(url: string): void {
   const noop = () => {};
   if (process.platform === "darwin") {
     execFile("open", [url], noop);
