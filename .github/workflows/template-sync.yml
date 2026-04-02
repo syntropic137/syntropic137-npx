@@ -9,6 +9,22 @@
 #
 # This workflow opens a PR with the updated templates. It does NOT auto-merge
 # or auto-publish. A human must review and merge. See SECURITY.md.
+#
+# Supply chain notes:
+#   - Templates are pulled from GitHub Release assets (not source files)
+#   - The compose file in release assets has digest-pinned images (@sha256:...)
+#   - package.json "platformVersion" tracks which syntropic release the templates are from
+#   - package.json "version" is always >= platformVersion (bumps patch on collision)
+#   - A CI consistency check validates version + digest pin alignment
+#
+# Versioning rules:
+#   - platformVersion = the syntropic release these templates came from
+#   - version = npm publish version (may drift ahead due to npx-only changes)
+#   - version >= platformVersion, always
+#   - If platformVersion > version: version resets to platformVersion
+#   - If platformVersion == version: version bumps patch (collision avoidance)
+#   - If platformVersion < version (same major.minor): version bumps patch, platformVersion updates
+#   - If platformVersion bumps major.minor: version resets to platformVersion
 
 name: Template Sync
 
@@ -16,7 +32,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Git ref (tag/branch) in syntropic137/syntropic137 to pull from"
+        description: "Release tag (e.g., v0.19.0) in syntropic137/syntropic137"
         required: false
         default: "main"
 
@@ -31,11 +47,44 @@ jobs:
       - name: Checkout this repo
         uses: actions/checkout@v4
 
-      - name: Checkout main repo templates
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Determine version
+        id: version
+        run: |
+          REF="${{ inputs.ref || 'main' }}"
+          # Strip leading 'v' for npm version
+          PLATFORM_VERSION="${REF#v}"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "platform_version=$PLATFORM_VERSION" >> "$GITHUB_OUTPUT"
+          echo "is_release=$( [[ "$REF" == v* ]] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+
+      # Download digest-pinned compose + selfhost files from release assets.
+      # These have @sha256:... image references, not floating :latest tags.
+      - name: Download release assets
+        if: steps.version.outputs.is_release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "${{ steps.version.outputs.ref }}" \
+            --repo syntropic137/syntropic137 \
+            --pattern "docker-compose.syntropic137.yaml" \
+            --pattern "selfhost-entrypoint.sh" \
+            --pattern "selfhost.env.example" \
+            --dir templates/ \
+            --clobber
+
+      # Fallback for non-release refs (e.g., "main") — pull source files.
+      # These use ${SYN_VERSION:-latest} tags, NOT digest-pinned.
+      - name: Checkout source templates (non-release fallback)
+        if: steps.version.outputs.is_release != 'true'
         uses: actions/checkout@v4
         with:
           repository: syntropic137/syntropic137
-          ref: ${{ inputs.ref || 'main' }}
+          ref: ${{ steps.version.outputs.ref }}
           path: _upstream
           sparse-checkout: |
             docker/docker-compose.syntropic137.yaml
@@ -43,17 +92,92 @@ jobs:
             docker/selfhost.env.example
             docker/init-db/01-create-databases.sql
 
-      - name: Copy templates
+      - name: Copy source templates (non-release fallback)
+        if: steps.version.outputs.is_release != 'true'
         run: |
           cp _upstream/docker/docker-compose.syntropic137.yaml templates/
           cp _upstream/docker/selfhost-entrypoint.sh templates/
           cp _upstream/docker/selfhost.env.example templates/
           cp _upstream/docker/init-db/01-create-databases.sql templates/init-db/
 
+      # init-db is not a release asset — always pull from source
+      - name: Sync init-db from source
+        if: steps.version.outputs.is_release == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: syntropic137/syntropic137
+          ref: ${{ steps.version.outputs.ref }}
+          path: _upstream
+          sparse-checkout: |
+            docker/init-db/01-create-databases.sql
+
+      - name: Copy init-db
+        if: steps.version.outputs.is_release == 'true'
+        run: |
+          cp _upstream/docker/init-db/01-create-databases.sql templates/init-db/
+
+      # Smart version bump:
+      #   - Sets platformVersion to the syntropic release
+      #   - Bumps npm version to max(current, platformVersion)
+      #   - On collision (current == platformVersion), bumps patch
+      - name: Bump version
+        if: steps.version.outputs.is_release == 'true'
+        run: |
+          PLATFORM="${{ steps.version.outputs.platform_version }}"
+          CURRENT=$(node -p "require('./package.json').version")
+
+          # Parse major.minor.patch
+          IFS='.' read -r P_MAJOR P_MINOR P_PATCH <<< "$PLATFORM"
+          IFS='.' read -r C_MAJOR C_MINOR C_PATCH <<< "$CURRENT"
+
+          # Determine the right npm version
+          if [[ "$P_MAJOR" -gt "$C_MAJOR" ]] || \
+             { [[ "$P_MAJOR" -eq "$C_MAJOR" ]] && [[ "$P_MINOR" -gt "$C_MINOR" ]]; }; then
+            # Platform bumped major or minor — reset to platform version
+            NEW_VERSION="$PLATFORM"
+          elif [[ "$PLATFORM" == "$CURRENT" ]]; then
+            # Collision — same version, bump patch
+            NEW_VERSION="${C_MAJOR}.${C_MINOR}.$((C_PATCH + 1))"
+          elif [[ "$P_MAJOR" -eq "$C_MAJOR" ]] && [[ "$P_MINOR" -eq "$C_MINOR" ]] && \
+               [[ "$P_PATCH" -gt "$C_PATCH" ]]; then
+            # Platform patch is ahead — reset to platform version
+            NEW_VERSION="$PLATFORM"
+          else
+            # Current is ahead of platform (npx-only patches) — bump patch
+            NEW_VERSION="${C_MAJOR}.${C_MINOR}.$((C_PATCH + 1))"
+          fi
+
+          # Update platformVersion in package.json
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.syntropic137 = pkg.syntropic137 || {};
+            pkg.syntropic137.platformVersion = '${PLATFORM}';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+          # Bump npm version (updates both package.json and package-lock.json)
+          npm version "$NEW_VERSION" --no-git-tag-version
+
+          echo "📦 Platform version: $PLATFORM"
+          echo "📦 Previous npm version: $CURRENT"
+          echo "📦 New npm version: $NEW_VERSION"
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Validate digest pins
+        if: steps.version.outputs.is_release == 'true'
+        run: |
+          # Every ghcr.io image must use @sha256: digest pins
+          if grep -E 'image:\s+ghcr\.io/.*:(latest|\$\{|v[0-9])' templates/docker-compose.syntropic137.yaml; then
+            echo "::error::Compose file contains floating image tags — expected @sha256: digest pins"
+            exit 1
+          fi
+          echo "✅ All GHCR images use digest pins"
+
       - name: Check for changes
         id: diff
         run: |
-          if git diff --quiet templates/; then
+          if git diff --quiet templates/ package.json package-lock.json; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -65,14 +189,16 @@ jobs:
         with:
           branch: chore/template-sync
           delete-branch: true
-          title: "chore: sync templates from upstream"
+          title: "chore: sync templates from upstream (${{ steps.version.outputs.ref }})"
           body: |
             Automated template sync from `syntropic137/syntropic137`.
 
-            **Source ref:** `${{ inputs.ref || 'main' }}`
+            **Source ref:** `${{ steps.version.outputs.ref }}`
+            **Platform version:** `${{ steps.version.outputs.platform_version }}`
+            **Digest-pinned:** ${{ steps.version.outputs.is_release == 'true' && '✅ Yes (from release assets)' || '⚠️ No (source checkout — floating tags)' }}
 
             Review the diff carefully before merging. See [SECURITY.md](./SECURITY.md) for context.
-          commit-message: "chore: sync templates from syntropic137/syntropic137"
+          commit-message: "chore: sync templates from syntropic137/syntropic137 (${{ steps.version.outputs.ref }})"
           labels: templates, automated
 
       - name: No changes
