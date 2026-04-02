@@ -109,8 +109,8 @@ jobs:
 
           # Check for floating tags on ghcr.io images
           if grep -E 'image:\s+ghcr\.io/.*:(latest|\$\{|v[0-9])' "$COMPOSE"; then
-            echo "::warning::Compose file contains floating image tags — should use @sha256: digest pins"
-            echo "::warning::This will become a hard failure once digest-pinned templates are synced"
-          else
-            echo "OK: All GHCR images use digest pins"
+            echo "::error::Compose file contains floating image tags — must use @sha256: digest pins"
+            exit 1
           fi
+
+          echo "OK: All GHCR images use digest pins"
