@@ -5,6 +5,7 @@
 #   2. All tests pass
 #   3. Build succeeds
 #   4. Zero runtime dependencies (supply chain security)
+#   5. Version consistency (version >= platformVersion, digest pins)
 
 name: CI
 
@@ -66,3 +67,50 @@ jobs:
             console.log('OK: Zero runtime dependencies');
           ")
           echo "$deps"
+
+  consistency:
+    runs-on: ubuntu-latest
+    name: Version consistency
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check version >= platformVersion
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          PLATFORM=$(node -p "require('./package.json').syntropic137?.platformVersion || ''")
+
+          if [ -z "$PLATFORM" ]; then
+            echo "⚠️ No platformVersion set — skipping version comparison"
+            exit 0
+          fi
+
+          echo "npm version:      $VERSION"
+          echo "platform version: $PLATFORM"
+
+          # Compare using node semver logic
+          node -e "
+            const v = '$VERSION'.split('.').map(Number);
+            const p = '$PLATFORM'.split('.').map(Number);
+            if (v[0] < p[0] || (v[0] === p[0] && v[1] < p[1]) || (v[0] === p[0] && v[1] === p[1] && v[2] < p[2])) {
+              console.error('FAIL: version (' + '$VERSION' + ') < platformVersion (' + '$PLATFORM' + ')');
+              process.exit(1);
+            }
+            console.log('OK: version >= platformVersion');
+          "
+
+      - name: Check digest pins in compose file
+        run: |
+          COMPOSE="templates/docker-compose.syntropic137.yaml"
+          if [ ! -f "$COMPOSE" ]; then
+            echo "⚠️ No compose file found — skipping digest check"
+            exit 0
+          fi
+
+          # Check for floating tags on ghcr.io images
+          if grep -E 'image:\s+ghcr\.io/.*:(latest|\$\{|v[0-9])' "$COMPOSE"; then
+            echo "::warning::Compose file contains floating image tags — should use @sha256: digest pins"
+            echo "::warning::This will become a hard failure once digest-pinned templates are synced"
+          else
+            echo "OK: All GHCR images use digest pins"
+          fi

@@ -4,8 +4,9 @@
 #   1. workflow_dispatch from the main repo's release workflow (via gh CLI)
 #   2. Manual workflow_dispatch (for ad-hoc syncs)
 #
-# The upstream token only needs actions:write (not contents:write), so a
-# leaked token can trigger runs but cannot push code. See SECURITY.md.
+# The upstream token needs actions:write + contents:read (not contents:write).
+# contents:read is required for gh workflow run's internal GraphQL call.
+# A leaked token can trigger runs but cannot push code. See SECURITY.md.
 #
 # This workflow opens a PR with the updated templates. It does NOT auto-merge
 # or auto-publish. A human must review and merge. See SECURITY.md.
