@@ -114,3 +114,40 @@ jobs:
           fi
 
           echo "OK: All GHCR images use digest pins"
+
+      - name: Verify image digests exist in registry
+        run: |
+          COMPOSE="templates/docker-compose.syntropic137.yaml"
+          if [ ! -f "$COMPOSE" ]; then
+            exit 0
+          fi
+
+          # Extract all ghcr.io image references with digest pins
+          IMAGES=$(grep -oP 'ghcr\.io/[^\s]+@sha256:[a-f0-9]+' "$COMPOSE" || true)
+          if [ -z "$IMAGES" ]; then
+            echo "No digest-pinned GHCR images found — skipping registry check"
+            exit 0
+          fi
+
+          FAILED=0
+          echo "$IMAGES" | while read -r IMAGE; do
+            REPO="${IMAGE%%@*}"
+            DIGEST="${IMAGE##*@}"
+            # Strip ghcr.io/ prefix for the API path
+            API_PATH="${REPO#ghcr.io/}"
+
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              "https://ghcr.io/v2/${API_PATH}/manifests/${DIGEST}" \
+              -H "Accept: application/vnd.oci.image.manifest.v1+json")
+
+            if [ "$STATUS" = "200" ]; then
+              echo "OK: ${API_PATH}@${DIGEST}"
+            else
+              echo "::error::Digest not found in registry: ${IMAGE} (HTTP ${STATUS})"
+              FAILED=1
+            fi
+          done
+
+          if [ "$FAILED" = "1" ]; then
+            exit 1
+          fi
