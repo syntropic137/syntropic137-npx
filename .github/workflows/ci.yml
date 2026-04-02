@@ -139,7 +139,7 @@ jobs:
             API_PATH="${REPO#ghcr.io/}"
 
             # GHCR requires an auth token even for public images
-            TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:${API_PATH}:pull" | \
+            TOKEN=$(curl -s "https://ghcr.io/token?service=ghcr.io&scope=repository:${API_PATH}:pull" | \
               node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).token)")
 
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
