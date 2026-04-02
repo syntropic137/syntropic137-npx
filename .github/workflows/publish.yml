@@ -37,19 +37,20 @@ jobs:
     environment: npm-publish  # Must match Trusted Publisher config on npmjs.com
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: "22"
           # NOTE: Do NOT set registry-url here — it creates an .npmrc with
           # ${NODE_AUTH_TOKEN} which interferes with OIDC token exchange.
 
-      # Ensure npm is new enough for Trusted Publishing OIDC
-      - name: Upgrade npm
+      # Pin npm to a specific version for reproducibility and supply chain safety.
+      # Trusted Publishing OIDC requires npm >= 11.5.1.
+      - name: Install pinned npm
         run: |
-          npm install -g npm@latest
+          npm install -g npm@11.7.0
           echo "Node: $(node -v)"
           echo "npm: $(npm -v)"
 
