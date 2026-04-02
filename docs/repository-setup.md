@@ -8,12 +8,22 @@ Only one GitHub Actions secret is required. npm publishing uses Trusted Publishi
 
 | Secret | Repo | Purpose |
 |--------|------|---------|
-| `NPX_DISPATCH_TOKEN` | **main repo** (`syntropic137/syntropic137`) | Fine-grained PAT scoped to `syntropic137/syntropic137-npx` only, with `Actions: Read and write`. Used to trigger `workflow_dispatch` events via `gh workflow run` that start template sync PRs. |
+| `NPX_DISPATCH_TOKEN` | **main repo** (`syntropic137/syntropic137`) | Fine-grained PAT scoped to `syntropic137/syntropic137-npx` only. Used to trigger `workflow_dispatch` events via `gh workflow run` that start template sync PRs. |
 
-> **Why `Actions: Read and write`?** The dispatch uses `gh workflow run` (workflow_dispatch),
-> not `repository_dispatch`. This only requires `Actions` permission — no `contents:write`
-> needed. The token can trigger workflow runs but cannot push code, merge PRs, or modify
-> releases.
+### PAT permissions (fine-grained)
+
+| Permission | Access | Why |
+|------------|--------|-----|
+| **Actions** | Read and write | Trigger `workflow_dispatch` via `gh workflow run` |
+| **Contents** | Read-only | `gh workflow run` calls `repository.defaultBranchRef` via GraphQL to resolve the default branch — **fails without this** even though no file content is read |
+| **Metadata** | Read-only | Auto-granted, required for API access |
+
+> **Do NOT grant Contents: Write** — read-only is sufficient. The token can trigger workflow
+> runs but cannot push code, merge PRs, or modify releases.
+>
+> **Gotcha:** Without `Contents: Read`, `gh workflow run` fails with
+> `Resource not accessible by personal access token (repository.defaultBranchRef)`.
+> This is not documented in GitHub's docs — the GraphQL call happens internally.
 
 ### npm Trusted Publishing
 
@@ -29,6 +39,23 @@ Instead of storing an npm token, the publish workflow authenticates via OIDC. Th
 - **Deployment branch restriction**: only allow `main` — ensures publish always deploys reviewed code
 - **Wait timer** (e.g. 30 minutes): gives you time to notice and cancel a rogue publish run
   - **Required reviewers** (if you have multiple maintainers): adds an approval gate before publish
+
+## Allow GitHub Actions to create pull requests
+
+Template sync opens PRs via `GITHUB_TOKEN`. This requires enabling the setting at **two levels** — the repo setting is grayed out if the org doesn't allow it.
+
+### 1. Organization level (`syntropic137` org)
+
+Settings -> Actions -> General -> Workflow permissions -> **"Allow GitHub Actions to create and approve pull requests"** -> enable
+
+This must be enabled first — it gates the repo-level setting.
+
+### 2. Repository level (`syntropic137-npx`)
+
+Settings -> Actions -> General -> Workflow permissions -> **"Allow GitHub Actions to create and approve pull requests"** -> enable
+
+> **Gotcha:** If the repo checkbox is grayed out and unclickable, the org-level setting is
+> disabled. Enable the org setting first, then the repo checkbox becomes available.
 
 ## Branch protection and code owners
 
@@ -63,7 +90,7 @@ When the main platform repo cuts a release, it notifies this repo to sync templa
 
 ### Setup in the main repo
 
-1. Create a fine-grained PAT scoped to `syntropic137/syntropic137-npx` only with `Actions: Read and write` permission
+1. Create a fine-grained PAT scoped to `syntropic137/syntropic137-npx` only with `Actions: Read and write` + `Contents: Read-only` (see [PAT permissions](#pat-permissions-fine-grained) above)
 2. Add it as a secret `NPX_DISPATCH_TOKEN` in the main repo (`syntropic137/syntropic137`)
 3. The release workflow (`release-containers.yaml`) already includes a step that runs `gh workflow run template-sync.yml` — see [UPSTREAM_DISPATCH.md](../.github/UPSTREAM_DISPATCH.md) for the snippet
 
@@ -78,7 +105,7 @@ This sends the release tag as `ref` so the CLI repo pulls templates from the exa
 
 ### Why this is safe even if the main repo is compromised
 
-- The dispatch token can trigger workflows but **cannot push code** — no `contents:write`
+- The dispatch token has `Contents: Read-only` — it **cannot push code**, only read (needed for `gh workflow run` GraphQL internals)
 - Template sync opens a PR via the workflow's `GITHUB_TOKEN`, not the dispatch token
 - CODEOWNERS + branch protection require human approval before merge
 - Even if the dispatch token triggers `publish.yml`, it publishes what's on `main` — code you already reviewed and merged
