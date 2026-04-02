@@ -142,9 +142,10 @@ jobs:
             TOKEN=$(curl -s "https://ghcr.io/token?service=ghcr.io&scope=repository:${API_PATH}:pull" | \
               node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).token)")
 
+            # Accept both single-arch manifests and multi-arch image indexes
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
               "https://ghcr.io/v2/${API_PATH}/manifests/${DIGEST}" \
-              -H "Accept: application/vnd.oci.image.manifest.v1+json" \
+              -H "Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.oci.image.index.v1+json" \
               -H "Authorization: Bearer ${TOKEN}")
 
             if [ "$STATUS" = "200" ]; then
