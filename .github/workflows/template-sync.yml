@@ -13,8 +13,18 @@
 # Supply chain notes:
 #   - Templates are pulled from GitHub Release assets (not source files)
 #   - The compose file in release assets has digest-pinned images (@sha256:...)
-#   - package.json version is auto-bumped to match the release tag
+#   - package.json "platformVersion" tracks which syntropic release the templates are from
+#   - package.json "version" is always >= platformVersion (bumps patch on collision)
 #   - A CI consistency check validates version + digest pin alignment
+#
+# Versioning rules:
+#   - platformVersion = the syntropic release these templates came from
+#   - version = npm publish version (may drift ahead due to npx-only changes)
+#   - version >= platformVersion, always
+#   - If platformVersion > version: version resets to platformVersion
+#   - If platformVersion == version: version bumps patch (collision avoidance)
+#   - If platformVersion < version (same major.minor): version bumps patch, platformVersion updates
+#   - If platformVersion bumps major.minor: version resets to platformVersion
 
 name: Template Sync
 
@@ -47,9 +57,9 @@ jobs:
         run: |
           REF="${{ inputs.ref || 'main' }}"
           # Strip leading 'v' for npm version
-          VERSION="${REF#v}"
+          PLATFORM_VERSION="${REF#v}"
           echo "ref=$REF" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "platform_version=$PLATFORM_VERSION" >> "$GITHUB_OUTPUT"
           echo "is_release=$( [[ "$REF" == v* ]] && echo true || echo false )" >> "$GITHUB_OUTPUT"
 
       # Download digest-pinned compose + selfhost files from release assets.
@@ -106,12 +116,53 @@ jobs:
         run: |
           cp _upstream/docker/init-db/01-create-databases.sql templates/init-db/
 
-      # Bump package.json + package-lock.json to match the release version
+      # Smart version bump:
+      #   - Sets platformVersion to the syntropic release
+      #   - Bumps npm version to max(current, platformVersion)
+      #   - On collision (current == platformVersion), bumps patch
       - name: Bump version
         if: steps.version.outputs.is_release == 'true'
         run: |
-          npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
-          echo "✅ Bumped package version to ${{ steps.version.outputs.version }}"
+          PLATFORM="${{ steps.version.outputs.platform_version }}"
+          CURRENT=$(node -p "require('./package.json').version")
+
+          # Parse major.minor.patch
+          IFS='.' read -r P_MAJOR P_MINOR P_PATCH <<< "$PLATFORM"
+          IFS='.' read -r C_MAJOR C_MINOR C_PATCH <<< "$CURRENT"
+
+          # Determine the right npm version
+          if [[ "$P_MAJOR" -gt "$C_MAJOR" ]] || \
+             { [[ "$P_MAJOR" -eq "$C_MAJOR" ]] && [[ "$P_MINOR" -gt "$C_MINOR" ]]; }; then
+            # Platform bumped major or minor — reset to platform version
+            NEW_VERSION="$PLATFORM"
+          elif [[ "$PLATFORM" == "$CURRENT" ]]; then
+            # Collision — same version, bump patch
+            NEW_VERSION="${C_MAJOR}.${C_MINOR}.$((C_PATCH + 1))"
+          elif [[ "$P_MAJOR" -eq "$C_MAJOR" ]] && [[ "$P_MINOR" -eq "$C_MINOR" ]] && \
+               [[ "$P_PATCH" -gt "$C_PATCH" ]]; then
+            # Platform patch is ahead — reset to platform version
+            NEW_VERSION="$PLATFORM"
+          else
+            # Current is ahead of platform (npx-only patches) — bump patch
+            NEW_VERSION="${C_MAJOR}.${C_MINOR}.$((C_PATCH + 1))"
+          fi
+
+          # Update platformVersion in package.json
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.syntropic137 = pkg.syntropic137 || {};
+            pkg.syntropic137.platformVersion = '${PLATFORM}';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+          # Bump npm version (updates both package.json and package-lock.json)
+          npm version "$NEW_VERSION" --no-git-tag-version
+
+          echo "📦 Platform version: $PLATFORM"
+          echo "📦 Previous npm version: $CURRENT"
+          echo "📦 New npm version: $NEW_VERSION"
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Validate digest pins
         if: steps.version.outputs.is_release == 'true'
@@ -143,7 +194,7 @@ jobs:
             Automated template sync from `syntropic137/syntropic137`.
 
             **Source ref:** `${{ steps.version.outputs.ref }}`
-            **Package version:** `${{ steps.version.outputs.version }}`
+            **Platform version:** `${{ steps.version.outputs.platform_version }}`
             **Digest-pinned:** ${{ steps.version.outputs.is_release == 'true' && '✅ Yes (from release assets)' || '⚠️ No (source checkout — floating tags)' }}
 
             Review the diff carefully before merging. See [SECURITY.md](./SECURITY.md) for context.

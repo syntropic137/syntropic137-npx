@@ -39,6 +39,9 @@
     "type": "git",
     "url": "git+https://github.com/syntropic137/syntropic137-npx.git"
   },
+  "syntropic137": {
+    "platformVersion": "0.18.2"
+  },
   "license": "MIT",
   "devDependencies": {
     "typescript": "^5.5.0",
