@@ -198,6 +198,14 @@ jobs:
             **Digest-pinned:** ${{ steps.version.outputs.is_release == 'true' && '✅ Yes (from release assets)' || '⚠️ No (source checkout — floating tags)' }}
 
             Review the diff carefully before merging. See [SECURITY.md](./SECURITY.md) for context.
+
+            ---
+
+            ## Post-merge checklist
+
+            - [ ] Review diff — templates, version bump, digest pins
+            - [ ] Merge this PR
+            - [ ] [**Trigger publish →**](https://github.com/syntropic137/syntropic137-npx/actions/workflows/publish.yml) (Actions → "Publish to npm" → Run workflow)
           commit-message: "chore: sync templates from syntropic137/syntropic137 (${{ steps.version.outputs.ref }})"
           labels: templates, automated
 
