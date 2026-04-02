@@ -109,8 +109,53 @@ jobs:
 
           # Check for floating tags on ghcr.io images
           if grep -E 'image:\s+ghcr\.io/.*:(latest|\$\{|v[0-9])' "$COMPOSE"; then
-            echo "::warning::Compose file contains floating image tags — should use @sha256: digest pins"
-            echo "::warning::This will become a hard failure once digest-pinned templates are synced"
-          else
-            echo "OK: All GHCR images use digest pins"
+            echo "::error::Compose file contains floating image tags — must use @sha256: digest pins"
+            exit 1
+          fi
+
+          echo "OK: All GHCR images use digest pins"
+
+      - name: Verify image digests exist in registry
+        run: |
+          COMPOSE="templates/docker-compose.syntropic137.yaml"
+          if [ ! -f "$COMPOSE" ]; then
+            exit 0
+          fi
+
+          # Extract all ghcr.io image references with digest pins
+          IMAGES=$(grep -oP 'ghcr\.io/[^\s]+@sha256:[a-f0-9]+' "$COMPOSE" || true)
+          if [ -z "$IMAGES" ]; then
+            echo "No digest-pinned GHCR images found — skipping registry check"
+            exit 0
+          fi
+
+          FAILED=0
+
+          # Use process substitution to avoid subshell (so FAILED propagates)
+          while read -r IMAGE; do
+            REPO="${IMAGE%%@*}"
+            DIGEST="${IMAGE##*@}"
+            # Strip ghcr.io/ prefix for the API path
+            API_PATH="${REPO#ghcr.io/}"
+
+            # GHCR requires an auth token even for public images
+            TOKEN=$(curl -s "https://ghcr.io/token?service=ghcr.io&scope=repository:${API_PATH}:pull" | \
+              node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).token)")
+
+            # Accept both single-arch manifests and multi-arch image indexes
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              "https://ghcr.io/v2/${API_PATH}/manifests/${DIGEST}" \
+              -H "Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.oci.image.index.v1+json" \
+              -H "Authorization: Bearer ${TOKEN}")
+
+            if [ "$STATUS" = "200" ]; then
+              echo "OK: ${API_PATH}@${DIGEST}"
+            else
+              echo "::error::Digest not found in registry: ${IMAGE} (HTTP ${STATUS})"
+              FAILED=1
+            fi
+          done <<< "$IMAGES"
+
+          if [ "$FAILED" = "1" ]; then
+            exit 1
           fi
