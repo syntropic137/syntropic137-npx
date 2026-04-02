@@ -4,8 +4,8 @@ Add this step to the release workflow in `syntropic137/syntropic137` to notify
 this CLI repo when a new platform release is tagged.
 
 This only triggers a workflow run in the CLI repo — it cannot merge or push code.
-The token only needs `Actions: Read and write` (not `contents:write`), so a leaked
-token can trigger workflow runs but cannot push code or modify releases. Note: the
+The token needs `Actions: Read and write` + `Contents: Read-only`. A leaked token
+can trigger workflow runs but cannot push code or modify releases. Note: the
 token *can* trigger any workflow_dispatch workflow (including publish), but publish
 only deploys what's on `main` — and the token cannot push to `main`. See
 [SECURITY.md](../../SECURITY.md).
@@ -13,7 +13,9 @@ only deploys what's on `main` — and the token cannot push to `main`. See
 ## Required Setup
 
 1. Create a fine-grained PAT scoped to `syntropic137/syntropic137-npx` only
-2. Grant **`Actions: Read and write`** permission
+2. Grant **`Actions: Read and write`** + **`Contents: Read-only`** permissions
+   - `Contents: Read` is required because `gh workflow run` internally calls
+     `repository.defaultBranchRef` via GraphQL to resolve the default branch
 3. Add it as a secret `NPX_DISPATCH_TOKEN` in the main repo
 
 ## Workflow Step

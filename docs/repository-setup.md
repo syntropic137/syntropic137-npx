@@ -38,7 +38,7 @@ Instead of storing an npm token, the publish workflow authenticates via OIDC. Th
 
 - **Deployment branch restriction**: only allow `main` — ensures publish always deploys reviewed code
 - **Wait timer** (e.g. 30 minutes): gives you time to notice and cancel a rogue publish run
-  - **Required reviewers** (if you have multiple maintainers): adds an approval gate before publish
+- **Required reviewers** (if you have multiple maintainers): adds an approval gate before publish
 
 ## Allow GitHub Actions to create pull requests
 
