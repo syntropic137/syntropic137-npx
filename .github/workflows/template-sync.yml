@@ -202,11 +202,11 @@ jobs:
 
             ---
 
-            ## Post-merge checklist
+            ## Checklist
 
             - [ ] Review diff — templates, version bump, digest pins
             - [ ] Merge this PR
-            - [ ] [**Trigger publish →**](https://github.com/syntropic137/syntropic137-npx/actions/workflows/publish.yml) (Actions → "Publish to npm" → Run workflow)
+            - [ ] [**Trigger publish →**](${{ github.server_url }}/${{ github.repository }}/actions/workflows/publish.yml) (Actions → "Publish to npm" → Run workflow)
           commit-message: "chore: sync templates from syntropic137/syntropic137 (${{ steps.version.outputs.ref }})"
           labels: templates, automated
 
