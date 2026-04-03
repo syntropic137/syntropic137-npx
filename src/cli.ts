@@ -368,6 +368,13 @@ export class InitFlow {
   static syncPlugin(isInstalled: boolean): void {
     try {
       if (isInstalled) {
+        // Refresh marketplace clone first (claude plugin update doesn't do this automatically)
+        try {
+          execFileSync("claude", ["plugin", "marketplace", "update", CLAUDE_PLUGIN_NAME], { stdio: "pipe" });
+        } catch (err) {
+          warn("Could not refresh marketplace cache; attempting plugin update anyway.");
+          if (err instanceof Error) info(err.message);
+        }
         execFileSync("claude", ["plugin", "update", CLAUDE_PLUGIN_FULL], { stdio: "pipe" });
         success("Claude Code plugin updated");
       } else {
@@ -376,7 +383,8 @@ export class InitFlow {
         success("Claude Code plugin installed");
       }
     } catch (err) {
-      warn("Could not install Claude Code plugin.");
+      const action = isInstalled ? "update" : "install";
+      warn(`Could not ${action} Claude Code plugin.`);
       if (err instanceof Error) info(err.message);
       info("Install manually: claude plugin marketplace add " + CLAUDE_PLUGIN_REPO);
     }
