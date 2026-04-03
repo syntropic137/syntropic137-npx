@@ -368,6 +368,8 @@ export class InitFlow {
   static syncPlugin(isInstalled: boolean): void {
     try {
       if (isInstalled) {
+        // Refresh marketplace clone first (claude plugin update doesn't do this automatically)
+        execFileSync("claude", ["plugin", "marketplace", "update", CLAUDE_PLUGIN_NAME], { stdio: "pipe" });
         execFileSync("claude", ["plugin", "update", CLAUDE_PLUGIN_FULL], { stdio: "pipe" });
         success("Claude Code plugin updated");
       } else {
