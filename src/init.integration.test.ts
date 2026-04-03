@@ -107,6 +107,7 @@ describe("parseArgs", () => {
     expect(parseArgs(["node", "cli", "plugin"]).command).toBe("plugin");
     expect(parseArgs(["node", "cli", "github-app"]).command).toBe("github-app");
     expect(parseArgs(["node", "cli", "tunnel"]).command).toBe("tunnel");
+    expect(parseArgs(["node", "cli", "cli"]).command).toBe("cli");
   });
 
   it("parses all flags", () => {

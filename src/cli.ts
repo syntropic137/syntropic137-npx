@@ -439,6 +439,44 @@ export class CLI {
       case "tunnel":
         await this.tunnel(dir);
         break;
+
+      case "cli":
+        CLI.cliSync();
+        break;
+    }
+  }
+
+  private static cliSync(): void {
+    const targetRange = `~${PLATFORM_VERSION}`;
+    const installed = InitFlow.getInstalledCliVersion();
+
+    if (installed) {
+      // Major.minor compatibility only — patch drift is expected because the
+      // NPX package may publish patch bumps independently of platform releases.
+      // See version-invariant docs for the full policy.
+      const [iMajor, iMinor] = installed.split(".").map(Number);
+      const [pMajor, pMinor] = PLATFORM_VERSION.split(".").map(Number);
+      if (iMajor === pMajor && iMinor === pMinor) {
+        success(`syn CLI ${installed} (compatible with platform ${PLATFORM_VERSION})`);
+        return;
+      }
+      warn(`syn CLI ${installed} is not compatible with platform ${PLATFORM_VERSION}`);
+    }
+
+    info(`Installing @syntropic137/cli@${targetRange}...`);
+    try {
+      execFileSync("npm", ["install", "-g", `@syntropic137/cli@${targetRange}`], { stdio: "pipe" });
+      success("syn CLI installed");
+    } catch (err) {
+      fail("Could not install syn CLI.");
+      if (err instanceof Error) info(err.message);
+      const execErr = err as { stderr?: Buffer | string; stdout?: Buffer | string };
+      const stderr = execErr.stderr?.toString().trim();
+      const stdout = execErr.stdout?.toString().trim();
+      if (stderr) info(stderr);
+      if (stdout) info(stdout);
+      info(`Install manually: npm install -g @syntropic137/cli@${targetRange}`);
+      process.exit(1);
     }
   }
 
@@ -636,7 +674,7 @@ export class CLI {
       process.exit(0);
     }
 
-    const subcommands = ["init", "status", "stop", "start", "logs", "update", "plugin", "github-app", "tunnel", "help"] as const;
+    const subcommands = ["init", "status", "stop", "start", "logs", "update", "plugin", "github-app", "tunnel", "cli", "help"] as const;
     type Subcommand = (typeof subcommands)[number];
     const firstArg = args[0];
     let command: CliOptions["command"] = "menu";
