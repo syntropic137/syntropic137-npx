@@ -345,7 +345,7 @@ export function setupOverview(opts: {
     console.log(boxLine(`    ${cyan(opts.skipGithub ? "7." : "8.")} Pull images, start stack, and health check`, width));
   }
   console.log(boxLine("", width));
-  console.log(boxLine(dim("  Each install step will prompt before proceeding."), width));
+  console.log(boxLine(dim("  Install steps may prompt before proceeding or be skipped automatically."), width));
   console.log(`  ${dim(BOX.bl + BOX.h.repeat(width + 2) + BOX.br)}`);
   console.log();
 }
@@ -382,7 +382,7 @@ export function summaryBox(opts: {
 
   console.log(boxLine("", width));
   console.log(boxLine(dim("  Next steps:"), width));
-  console.log(boxLine(`    ${bold("1.")} Open Claude Code — the plugin is ready`, width));
+  console.log(boxLine(`    ${bold("1.")} Open Claude Code (if you installed the plugin, it's ready)`, width));
   console.log(boxLine(`    ${bold("2.")} Say: ${cyan('"Add the default Syntropic137 marketplace workflows"')}`, width));
   console.log(boxLine(`    ${bold("3.")} Say: ${cyan('"Run code-review on my latest PR"')}`, width));
 
@@ -390,7 +390,7 @@ export function summaryBox(opts: {
   console.log(boxLine(`  ${yellow("!")} ${bold("Remote access & full GitHub event cycle")}`, width));
   console.log(boxLine(`    Without a Cloudflare tunnel, only ${bold("17")} event types work (via polling).`, width));
   console.log(boxLine(`    CI/CD events (check_run, workflow_run, deployments) require webhooks.`, width));
-  console.log(boxLine(`    Set up a tunnel: ${cyan("npx @syntropic137/setup tunnel")}`, width));
+  console.log(boxLine(`    Set up a tunnel: ${cyan(`${BIN} tunnel`)}`, width));
   console.log(boxLine(`    Event reference: ${dim("github.com/syntropic137/syntropic137")}`, width));
   console.log(boxLine(`      ${dim("packages/syn-domain/.../github/_shared/event_availability.py")}`, width));
 

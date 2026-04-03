@@ -264,11 +264,15 @@ export class InitFlow {
   }
 
   private async installCli(): Promise<void> {
+    if (!process.stdout.isTTY) return; // Skip in non-interactive/CI environments
+
     const targetRange = `~${PLATFORM_VERSION}`; // same major.minor, patch >= platform
     const installed = InitFlow.getInstalledCliVersion();
 
     if (installed) {
-      // Check if major.minor matches
+      // Version compatibility: major.minor must match; patch drift is allowed.
+      // The NPX CLI can independently bump patch versions between platform releases.
+      // Only major.minor alignment is enforced — see version-invariant docs.
       const [iMajor, iMinor] = installed.split(".").map(Number);
       const [pMajor, pMinor] = PLATFORM_VERSION.split(".").map(Number);
       if (iMajor === pMajor && iMinor === pMinor) {
@@ -515,12 +519,12 @@ export class CLI {
       {
         label: "Tailscale Funnel",
         value: "tailscale",
-        description: "Coming soon — github.com/syntropic137/syntropic137/issues/TBD",
+        description: "Coming soon",
       },
       {
         label: "ngrok",
         value: "ngrok",
-        description: "Coming soon — github.com/syntropic137/syntropic137/issues/TBD",
+        description: "Coming soon",
       },
     ];
 
@@ -560,7 +564,9 @@ export class CLI {
 
     // Read existing .env values, merge tunnel config, and rewrite
     const env = config.readEnv();
-    env.COMPOSE_PROFILES = "tunnel";
+    const existingProfiles = (env.COMPOSE_PROFILES ?? "").split(",").map(s => s.trim()).filter(Boolean);
+    if (!existingProfiles.includes("tunnel")) existingProfiles.push("tunnel");
+    env.COMPOSE_PROFILES = existingProfiles.join(",");
     env.CLOUDFLARE_TUNNEL_TOKEN = token;
     env.SYN_PUBLIC_HOSTNAME = hostname;
     config.writeEnv(env as EnvValues, TEMPLATES_DIR);
