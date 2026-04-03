@@ -439,6 +439,36 @@ export class CLI {
       case "tunnel":
         await this.tunnel(dir);
         break;
+
+      case "cli":
+        CLI.cliSync();
+        break;
+    }
+  }
+
+  private static cliSync(): void {
+    const targetRange = `~${PLATFORM_VERSION}`;
+    const installed = InitFlow.getInstalledCliVersion();
+
+    if (installed) {
+      const [iMajor, iMinor] = installed.split(".").map(Number);
+      const [pMajor, pMinor] = PLATFORM_VERSION.split(".").map(Number);
+      if (iMajor === pMajor && iMinor === pMinor) {
+        success(`syn CLI ${installed} (matches platform ${PLATFORM_VERSION})`);
+        return;
+      }
+      warn(`syn CLI ${installed} does not match platform ${PLATFORM_VERSION}`);
+    }
+
+    info(`Installing @syntropic137/cli@${targetRange}...`);
+    try {
+      execFileSync("npm", ["install", "-g", `@syntropic137/cli@${targetRange}`], { stdio: "pipe" });
+      success("syn CLI installed");
+    } catch (err) {
+      fail("Could not install syn CLI.");
+      if (err instanceof Error) info(err.message);
+      info(`Install manually: npm install -g @syntropic137/cli@${targetRange}`);
+      process.exit(1);
     }
   }
 
@@ -636,7 +666,7 @@ export class CLI {
       process.exit(0);
     }
 
-    const subcommands = ["init", "status", "stop", "start", "logs", "update", "plugin", "github-app", "tunnel", "help"] as const;
+    const subcommands = ["init", "status", "stop", "start", "logs", "update", "plugin", "github-app", "tunnel", "cli", "help"] as const;
     type Subcommand = (typeof subcommands)[number];
     const firstArg = args[0];
     let command: CliOptions["command"] = "menu";
