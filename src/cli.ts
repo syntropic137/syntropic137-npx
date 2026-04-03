@@ -7,6 +7,7 @@ import { execFileSync } from "node:child_process";
 import type { CliOptions, EnvValues } from "./types.js";
 import {
   banner,
+  setupOverview,
   summaryBox,
   step,
   info,
@@ -86,6 +87,12 @@ export class InitFlow {
     if (this.opts.skipGithub) steps -= 1;
     if (this.opts.skipDocker) steps -= 3;
     setTotalSteps(steps);
+
+    // ── Pre-setup overview ─────────────────────────────────────────────
+    setupOverview({
+      skipGithub: this.opts.skipGithub ?? false,
+      skipDocker: this.opts.skipDocker ?? false,
+    });
 
     // Re-run safety: detect existing .env
     let reconfigure = false;
