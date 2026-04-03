@@ -32,7 +32,6 @@ import {
   DEFAULT_APP_NAME,
   DEFAULT_PORT,
   DEFAULT_APP_ENVIRONMENT,
-  DEFAULT_VERSION,
   COMPOSE_FILE,
   TEMPLATE_FILES,
   CMD,
@@ -53,9 +52,11 @@ const PKG_DIR = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const VERSION = JSON.parse(
+const _pkg = JSON.parse(
   fs.readFileSync(path.join(PKG_DIR, "package.json"), "utf-8"),
-).version as string;
+);
+const VERSION = _pkg.version as string;
+const PLATFORM_VERSION: string = _pkg.syntropic137?.platformVersion ?? VERSION;
 
 const TEMPLATES_DIR = path.join(PKG_DIR, "templates");
 
@@ -81,7 +82,7 @@ export class InitFlow {
   async run(): Promise<void> {
     banner();
 
-    let steps = 11;
+    let steps = 12;
     if (this.opts.skipGithub) steps -= 1;
     if (this.opts.skipDocker) steps -= 3;
     setTotalSteps(steps);
@@ -141,7 +142,7 @@ export class InitFlow {
     step("Configuring LLM provider");
     const envValues: EnvValues = {
       APP_ENVIRONMENT: DEFAULT_APP_ENVIRONMENT,
-      SYN_VERSION: DEFAULT_VERSION,
+      SYN_VERSION: PLATFORM_VERSION,
     };
 
     const existingKey = process.env.ANTHROPIC_API_KEY || "";
@@ -214,7 +215,11 @@ export class InitFlow {
     step("Claude Code plugin");
     await this.installClaudePlugin();
 
-    // ── Step 8: Write .env ──────────────────────────────────────────────
+    // ── Step 8: Syntropic137 CLI ─────────────────────────────────────────
+    step("Syntropic137 CLI");
+    await this.installCli();
+
+    // ── Step 9: Write .env ──────────────────────────────────────────────
     step("Writing configuration");
     this.config.writeEnv(envValues, TEMPLATES_DIR);
 
@@ -225,7 +230,7 @@ export class InitFlow {
       return;
     }
 
-    // ── Steps 9–11: Docker ──────────────────────────────────────────────
+    // ── Steps 10–12: Docker ──────────────────────────────────────────────
     const docker = new DockerService(this.installDir);
 
     step("Pulling container images");
@@ -249,6 +254,55 @@ export class InitFlow {
     const dest = path.join(this.installDir, relativePath);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.copyFileSync(src, dest);
+  }
+
+  private async installCli(): Promise<void> {
+    const targetRange = `~${PLATFORM_VERSION}`; // same major.minor, patch >= platform
+    const installed = InitFlow.getInstalledCliVersion();
+
+    if (installed) {
+      // Check if major.minor matches
+      const [iMajor, iMinor] = installed.split(".").map(Number);
+      const [pMajor, pMinor] = PLATFORM_VERSION.split(".").map(Number);
+      if (iMajor === pMajor && iMinor === pMinor) {
+        success(`syn CLI ${installed} (matches platform ${PLATFORM_VERSION})`);
+        return;
+      }
+      warn(`syn CLI ${installed} does not match platform ${PLATFORM_VERSION}`);
+      const proceed = await confirm(`Update to @syntropic137/cli@${targetRange}?`);
+      if (!proceed) { info("Skipped."); return; }
+    } else {
+      info("The syn CLI lets you manage workflows, triggers, and executions.");
+      const proceed = await confirm(`Install @syntropic137/cli@${targetRange}? (recommended)`);
+      if (!proceed) {
+        info("Skipped. Install later: npm install -g @syntropic137/cli");
+        return;
+      }
+    }
+
+    try {
+      execFileSync("npm", ["install", "-g", `@syntropic137/cli@${targetRange}`], { stdio: "pipe" });
+      success("syn CLI installed");
+    } catch (err) {
+      warn("Could not install syn CLI.");
+      if (err instanceof Error) info(err.message);
+      info(`Install manually: npm install -g @syntropic137/cli@${targetRange}`);
+    }
+  }
+
+  /** Get installed syn CLI version, or null if not found. */
+  static getInstalledCliVersion(): string | null {
+    try {
+      const output = execFileSync("syn", ["version"], {
+        encoding: "utf-8",
+        stdio: "pipe",
+      });
+      // Expected output like "0.19.7" or "syn-cli 0.19.7"
+      const match = output.match(/(\d+\.\d+\.\d+)/);
+      return match ? match[1] : null;
+    } catch {
+      return null;
+    }
   }
 
   private async installClaudePlugin(): Promise<void> {

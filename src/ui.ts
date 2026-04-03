@@ -350,6 +350,12 @@ export function summaryBox(opts: {
     console.log(boxLine(`    ${bold(cmd.padEnd(30))}${dim(c.description)}`, width));
   }
 
+  console.log(boxLine("", width));
+  console.log(boxLine(dim("  Next steps:"), width));
+  console.log(boxLine(`    ${bold("1.")} Open Claude Code — the plugin is ready`, width));
+  console.log(boxLine(`    ${bold("2.")} Say: ${cyan('"Add the default Syntropic137 marketplace workflows"')}`, width));
+  console.log(boxLine(`    ${bold("3.")} Say: ${cyan('"Run code-review on my latest PR"')}`, width));
+
   console.log(`  ${dim(BOX.bl + BOX.h.repeat(width + 2) + BOX.br)}`);
   console.log();
 }
