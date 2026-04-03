@@ -431,6 +431,10 @@ export class CLI {
       case "github-app":
         await this.githubApp(dir);
         break;
+
+      case "tunnel":
+        await this.tunnel(dir);
+        break;
     }
   }
 
@@ -488,6 +492,109 @@ export class CLI {
     openBrowser(url);
   }
 
+  // ── Tunnel setup ─────────────────────────────────────────────────────
+
+  private async tunnel(dir: string): Promise<void> {
+    const installDir = this.resolveDir(dir);
+    const config = new ConfigManager(installDir);
+
+    console.log();
+    info(bold("Remote Access Setup"));
+    console.log();
+    info("A tunnel exposes your local Syntropic137 instance to the internet,");
+    info("enabling GitHub webhooks and full event coverage (60+ event types).");
+    info(`Without a tunnel, only ${bold("17")} event types work (via polling).`);
+    console.log();
+
+    const providers: MenuItem[] = [
+      {
+        label: "Cloudflare Tunnel",
+        value: "cloudflare",
+        description: "Free, production-ready (recommended)",
+      },
+      {
+        label: "Tailscale Funnel",
+        value: "tailscale",
+        description: "Coming soon — github.com/syntropic137/syntropic137/issues/TBD",
+      },
+      {
+        label: "ngrok",
+        value: "ngrok",
+        description: "Coming soon — github.com/syntropic137/syntropic137/issues/TBD",
+      },
+    ];
+
+    const provider = await interactiveMenu(providers, "Choose a tunnel provider:");
+    console.log();
+
+    if (provider !== "cloudflare") {
+      info(`${bold(providers.find((p) => p.value === provider)!.label)} support is not yet available.`);
+      info("Track progress at the linked GitHub issue.");
+      info(`In the meantime, use ${cyan("Cloudflare Tunnel")} (free tier available).`);
+      return;
+    }
+
+    // ── Cloudflare Tunnel flow ──────────────────────────────────────────
+    info(bold("Cloudflare Tunnel Setup"));
+    console.log();
+    info("Prerequisites:");
+    info("  1. A Cloudflare account (free tier works)");
+    info("  2. A domain added to Cloudflare DNS");
+    info("  3. A tunnel created via the Cloudflare dashboard or CLI");
+    console.log();
+    info("Create a tunnel: https://one.dash.cloudflare.com → Networks → Tunnels");
+    info("Point it to: http://syn-gateway:8137 (internal Docker service)");
+    console.log();
+
+    const token = await promptSecret("Cloudflare Tunnel token");
+    if (!token) {
+      warn("No token provided. You can set CLOUDFLARE_TUNNEL_TOKEN in .env later.");
+      return;
+    }
+
+    const hostname = await prompt("Public hostname (e.g. syn.example.com)");
+    if (!hostname) {
+      warn("No hostname provided. You can set SYN_PUBLIC_HOSTNAME in .env later.");
+      return;
+    }
+
+    // Read existing .env values, merge tunnel config, and rewrite
+    const env = config.readEnv();
+    env.COMPOSE_PROFILES = "tunnel";
+    env.CLOUDFLARE_TUNNEL_TOKEN = token;
+    env.SYN_PUBLIC_HOSTNAME = hostname;
+    config.writeEnv(env as EnvValues, TEMPLATES_DIR);
+
+    console.log();
+    success("Tunnel configuration saved");
+    info(`  COMPOSE_PROFILES=tunnel`);
+    info(`  SYN_PUBLIC_HOSTNAME=${hostname}`);
+    console.log();
+
+    // Offer to restart the stack so the tunnel container starts
+    const restart = await confirm("Restart the stack now to activate the tunnel?");
+    if (restart) {
+      try {
+        const docker = new DockerService(installDir);
+        docker.stop();
+        docker.start();
+        success("Stack restarted with tunnel enabled");
+      } catch (err) {
+        warn("Could not restart the stack.");
+        if (err instanceof Error) info(err.message);
+        info(`Restart manually: ${CMD.start}`);
+      }
+    } else {
+      info(`Restart when ready: ${CMD.start}`);
+    }
+
+    console.log();
+    info(bold("Next steps:"));
+    info(`  1. Verify the tunnel: open ${cyan(`https://${hostname}`)}`);
+    info(`  2. Update your GitHub App webhook URL to ${cyan(`https://${hostname}/api/v1/github/webhooks`)}`);
+    info(`  3. Run ${cyan(CMD["github-app"])} to open GitHub App settings`);
+  }
+
   // ── Interactive menu ──────────────────────────────────────────────────
 
   private async showMenu(): Promise<CliOptions["command"]> {
@@ -523,7 +630,7 @@ export class CLI {
       process.exit(0);
     }
 
-    const subcommands = ["init", "status", "stop", "start", "logs", "update", "plugin", "github-app", "help"] as const;
+    const subcommands = ["init", "status", "stop", "start", "logs", "update", "plugin", "github-app", "tunnel", "help"] as const;
     type Subcommand = (typeof subcommands)[number];
     const firstArg = args[0];
     let command: CliOptions["command"] = "menu";

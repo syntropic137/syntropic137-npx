@@ -390,7 +390,7 @@ export function summaryBox(opts: {
   console.log(boxLine(`  ${yellow("!")} ${bold("Remote access & full GitHub event cycle")}`, width));
   console.log(boxLine(`    Without a Cloudflare tunnel, only ${bold("17")} event types work (via polling).`, width));
   console.log(boxLine(`    CI/CD events (check_run, workflow_run, deployments) require webhooks.`, width));
-  console.log(boxLine(`    Set up a tunnel: ${cyan("npx @syntropic137/setup init --webhook-url <url>")}`, width));
+  console.log(boxLine(`    Set up a tunnel: ${cyan("npx @syntropic137/setup tunnel")}`, width));
   console.log(boxLine(`    Event reference: ${dim("github.com/syntropic137/syntropic137")}`, width));
   console.log(boxLine(`      ${dim("packages/syn-domain/.../github/_shared/event_availability.py")}`, width));
 
