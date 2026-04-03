@@ -20,8 +20,10 @@ vi.mock("./ui.js", () => ({
   prompt: vi.fn().mockResolvedValue(""),
   promptSecret: vi.fn().mockResolvedValue("sk-ant-test-key-123"),
   confirm: vi.fn().mockResolvedValue(true),
+  setupOverview: vi.fn(),
   summaryBox: vi.fn(),
   spinner: vi.fn(() => ({ stop: vi.fn(), update: vi.fn() })),
+  interactiveMenu: vi.fn().mockResolvedValue("cloudflare"),
 }));
 
 // Mock Docker — not needed with --skip-docker but prevents accidental calls
@@ -104,6 +106,7 @@ describe("parseArgs", () => {
     expect(parseArgs(["node", "cli", "update"]).command).toBe("update");
     expect(parseArgs(["node", "cli", "plugin"]).command).toBe("plugin");
     expect(parseArgs(["node", "cli", "github-app"]).command).toBe("github-app");
+    expect(parseArgs(["node", "cli", "tunnel"]).command).toBe("tunnel");
   });
 
   it("parses all flags", () => {

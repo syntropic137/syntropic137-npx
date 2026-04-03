@@ -15,7 +15,6 @@ export const COMPOSE_FILE = "docker-compose.syntropic137.yaml";
 export const DEFAULT_APP_NAME = "syntropic137";
 export const DEFAULT_PORT = "8137";
 export const DEFAULT_APP_ENVIRONMENT = "selfhost";
-export const DEFAULT_VERSION = "latest";
 
 // ---------------------------------------------------------------------------
 // CLI command reference (single source of truth for all user-facing commands)
@@ -43,6 +42,7 @@ export const COMMANDS: readonly CommandDef[] = [
   { name: "update", description: "Pull latest images and restart" },
   { name: "plugin", description: "Install or update the Claude Code plugin" },
   { name: "github-app", description: "Open GitHub App settings in your browser" },
+  { name: "tunnel", description: "Set up remote access (Cloudflare tunnel)" },
 ] as const;
 
 /** Shorthand lookup: CMD.init → "npx @syntropic137/setup init" */

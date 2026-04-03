@@ -1,6 +1,6 @@
 /** CLI options parsed from argv. */
 export interface CliOptions {
-  command: "init" | "status" | "stop" | "start" | "logs" | "update" | "plugin" | "github-app" | "menu" | "help";
+  command: "init" | "status" | "stop" | "start" | "logs" | "update" | "plugin" | "github-app" | "tunnel" | "menu" | "help";
   org?: string;
   name?: string;
   dir?: string;

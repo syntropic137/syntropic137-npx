@@ -7,6 +7,7 @@ import { execFileSync } from "node:child_process";
 import type { CliOptions, EnvValues } from "./types.js";
 import {
   banner,
+  setupOverview,
   summaryBox,
   step,
   info,
@@ -32,7 +33,6 @@ import {
   DEFAULT_APP_NAME,
   DEFAULT_PORT,
   DEFAULT_APP_ENVIRONMENT,
-  DEFAULT_VERSION,
   COMPOSE_FILE,
   TEMPLATE_FILES,
   CMD,
@@ -53,9 +53,11 @@ const PKG_DIR = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const VERSION = JSON.parse(
+const _pkg = JSON.parse(
   fs.readFileSync(path.join(PKG_DIR, "package.json"), "utf-8"),
-).version as string;
+);
+const VERSION = _pkg.version as string;
+const PLATFORM_VERSION: string = _pkg.syntropic137?.platformVersion ?? VERSION;
 
 const TEMPLATES_DIR = path.join(PKG_DIR, "templates");
 
@@ -81,10 +83,16 @@ export class InitFlow {
   async run(): Promise<void> {
     banner();
 
-    let steps = 11;
+    let steps = 12;
     if (this.opts.skipGithub) steps -= 1;
     if (this.opts.skipDocker) steps -= 3;
     setTotalSteps(steps);
+
+    // ── Pre-setup overview ─────────────────────────────────────────────
+    setupOverview({
+      skipGithub: this.opts.skipGithub ?? false,
+      skipDocker: this.opts.skipDocker ?? false,
+    });
 
     // Re-run safety: detect existing .env
     let reconfigure = false;
@@ -141,7 +149,7 @@ export class InitFlow {
     step("Configuring LLM provider");
     const envValues: EnvValues = {
       APP_ENVIRONMENT: DEFAULT_APP_ENVIRONMENT,
-      SYN_VERSION: DEFAULT_VERSION,
+      SYN_VERSION: PLATFORM_VERSION,
     };
 
     const existingKey = process.env.ANTHROPIC_API_KEY || "";
@@ -214,7 +222,11 @@ export class InitFlow {
     step("Claude Code plugin");
     await this.installClaudePlugin();
 
-    // ── Step 8: Write .env ──────────────────────────────────────────────
+    // ── Step 8: Syntropic137 CLI ─────────────────────────────────────────
+    step("Syntropic137 CLI");
+    await this.installCli();
+
+    // ── Step 9: Write .env ──────────────────────────────────────────────
     step("Writing configuration");
     this.config.writeEnv(envValues, TEMPLATES_DIR);
 
@@ -225,7 +237,7 @@ export class InitFlow {
       return;
     }
 
-    // ── Steps 9–11: Docker ──────────────────────────────────────────────
+    // ── Steps 10–12: Docker ──────────────────────────────────────────────
     const docker = new DockerService(this.installDir);
 
     step("Pulling container images");
@@ -249,6 +261,59 @@ export class InitFlow {
     const dest = path.join(this.installDir, relativePath);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.copyFileSync(src, dest);
+  }
+
+  private async installCli(): Promise<void> {
+    if (!process.stdout.isTTY) return; // Skip in non-interactive/CI environments
+
+    const targetRange = `~${PLATFORM_VERSION}`; // same major.minor, patch >= platform
+    const installed = InitFlow.getInstalledCliVersion();
+
+    if (installed) {
+      // Version compatibility: major.minor must match; patch drift is allowed.
+      // The NPX CLI can independently bump patch versions between platform releases.
+      // Only major.minor alignment is enforced — see version-invariant docs.
+      const [iMajor, iMinor] = installed.split(".").map(Number);
+      const [pMajor, pMinor] = PLATFORM_VERSION.split(".").map(Number);
+      if (iMajor === pMajor && iMinor === pMinor) {
+        success(`syn CLI ${installed} (matches platform ${PLATFORM_VERSION})`);
+        return;
+      }
+      warn(`syn CLI ${installed} does not match platform ${PLATFORM_VERSION}`);
+      const proceed = await confirm(`Update to @syntropic137/cli@${targetRange}?`);
+      if (!proceed) { info("Skipped."); return; }
+    } else {
+      info("The syn CLI lets you manage workflows, triggers, and executions.");
+      const proceed = await confirm(`Install @syntropic137/cli@${targetRange}? (recommended)`);
+      if (!proceed) {
+        info("Skipped. Install later: npm install -g @syntropic137/cli");
+        return;
+      }
+    }
+
+    try {
+      execFileSync("npm", ["install", "-g", `@syntropic137/cli@${targetRange}`], { stdio: "pipe" });
+      success("syn CLI installed");
+    } catch (err) {
+      warn("Could not install syn CLI.");
+      if (err instanceof Error) info(err.message);
+      info(`Install manually: npm install -g @syntropic137/cli@${targetRange}`);
+    }
+  }
+
+  /** Get installed syn CLI version, or null if not found. */
+  static getInstalledCliVersion(): string | null {
+    try {
+      const output = execFileSync("syn", ["version"], {
+        encoding: "utf-8",
+        stdio: "pipe",
+      });
+      // Expected output like "0.19.7" or "syn-cli 0.19.7"
+      const match = output.match(/(\d+\.\d+\.\d+)/);
+      return match ? match[1] : null;
+    } catch {
+      return null;
+    }
   }
 
   private async installClaudePlugin(): Promise<void> {
@@ -370,6 +435,10 @@ export class CLI {
       case "github-app":
         await this.githubApp(dir);
         break;
+
+      case "tunnel":
+        await this.tunnel(dir);
+        break;
     }
   }
 
@@ -427,6 +496,111 @@ export class CLI {
     openBrowser(url);
   }
 
+  // ── Tunnel setup ─────────────────────────────────────────────────────
+
+  private async tunnel(dir: string): Promise<void> {
+    const installDir = this.resolveDir(dir);
+    const config = new ConfigManager(installDir);
+
+    console.log();
+    info(bold("Remote Access Setup"));
+    console.log();
+    info("A tunnel exposes your local Syntropic137 instance to the internet,");
+    info("enabling GitHub webhooks and full event coverage (60+ event types).");
+    info(`Without a tunnel, only ${bold("17")} event types work (via polling).`);
+    console.log();
+
+    const providers: MenuItem[] = [
+      {
+        label: "Cloudflare Tunnel",
+        value: "cloudflare",
+        description: "Free, production-ready (recommended)",
+      },
+      {
+        label: "Tailscale Funnel",
+        value: "tailscale",
+        description: "Coming soon",
+      },
+      {
+        label: "ngrok",
+        value: "ngrok",
+        description: "Coming soon",
+      },
+    ];
+
+    const provider = await interactiveMenu(providers, "Choose a tunnel provider:");
+    console.log();
+
+    if (provider !== "cloudflare") {
+      info(`${bold(providers.find((p) => p.value === provider)!.label)} support is not yet available.`);
+      info("Track progress at the linked GitHub issue.");
+      info(`In the meantime, use ${cyan("Cloudflare Tunnel")} (free tier available).`);
+      return;
+    }
+
+    // ── Cloudflare Tunnel flow ──────────────────────────────────────────
+    info(bold("Cloudflare Tunnel Setup"));
+    console.log();
+    info("Prerequisites:");
+    info("  1. A Cloudflare account (free tier works)");
+    info("  2. A domain added to Cloudflare DNS");
+    info("  3. A tunnel created via the Cloudflare dashboard or CLI");
+    console.log();
+    info("Create a tunnel: https://one.dash.cloudflare.com → Networks → Tunnels");
+    info("Point it to: http://syn-gateway:8137 (internal Docker service)");
+    console.log();
+
+    const token = await promptSecret("Cloudflare Tunnel token");
+    if (!token) {
+      warn("No token provided. You can set CLOUDFLARE_TUNNEL_TOKEN in .env later.");
+      return;
+    }
+
+    const hostname = await prompt("Public hostname (e.g. syn.example.com)");
+    if (!hostname) {
+      warn("No hostname provided. You can set SYN_PUBLIC_HOSTNAME in .env later.");
+      return;
+    }
+
+    // Read existing .env values, merge tunnel config, and rewrite
+    const env = config.readEnv();
+    const existingProfiles = (env.COMPOSE_PROFILES ?? "").split(",").map(s => s.trim()).filter(Boolean);
+    if (!existingProfiles.includes("tunnel")) existingProfiles.push("tunnel");
+    env.COMPOSE_PROFILES = existingProfiles.join(",");
+    env.CLOUDFLARE_TUNNEL_TOKEN = token;
+    env.SYN_PUBLIC_HOSTNAME = hostname;
+    config.writeEnv(env as EnvValues, TEMPLATES_DIR);
+
+    console.log();
+    success("Tunnel configuration saved");
+    info(`  COMPOSE_PROFILES=tunnel`);
+    info(`  SYN_PUBLIC_HOSTNAME=${hostname}`);
+    console.log();
+
+    // Offer to restart the stack so the tunnel container starts
+    const restart = await confirm("Restart the stack now to activate the tunnel?");
+    if (restart) {
+      try {
+        const docker = new DockerService(installDir);
+        docker.stop();
+        docker.start();
+        success("Stack restarted with tunnel enabled");
+      } catch (err) {
+        warn("Could not restart the stack.");
+        if (err instanceof Error) info(err.message);
+        info(`Restart manually: ${CMD.start}`);
+      }
+    } else {
+      info(`Restart when ready: ${CMD.start}`);
+    }
+
+    console.log();
+    info(bold("Next steps:"));
+    info(`  1. Verify the tunnel: open ${cyan(`https://${hostname}`)}`);
+    info(`  2. Update your GitHub App webhook URL to ${cyan(`https://${hostname}/api/v1/github/webhooks`)}`);
+    info(`  3. Run ${cyan(CMD["github-app"])} to open GitHub App settings`);
+  }
+
   // ── Interactive menu ──────────────────────────────────────────────────
 
   private async showMenu(): Promise<CliOptions["command"]> {
@@ -462,7 +636,7 @@ export class CLI {
       process.exit(0);
     }
 
-    const subcommands = ["init", "status", "stop", "start", "logs", "update", "plugin", "github-app", "help"] as const;
+    const subcommands = ["init", "status", "stop", "start", "logs", "update", "plugin", "github-app", "tunnel", "help"] as const;
     type Subcommand = (typeof subcommands)[number];
     const firstArg = args[0];
     let command: CliOptions["command"] = "menu";
