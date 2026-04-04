@@ -2,7 +2,6 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import type { CliOptions, EnvValues } from "./types.js";
 import {
@@ -44,22 +43,17 @@ import {
   GITHUB_BASE,
   GITHUB_SLUG_RE,
 } from "./constants.js";
+import { PKG_DIR, TEMPLATES_DIR, syncTemplate } from "./templates.js";
 
 // ---------------------------------------------------------------------------
 // Version & paths
 // ---------------------------------------------------------------------------
 
-const PKG_DIR = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-);
 const _pkg = JSON.parse(
   fs.readFileSync(path.join(PKG_DIR, "package.json"), "utf-8"),
 );
 const VERSION = _pkg.version as string;
 const PLATFORM_VERSION: string = _pkg.syntropic137?.platformVersion ?? VERSION;
-
-const TEMPLATES_DIR = path.join(PKG_DIR, "templates");
 
 // ---------------------------------------------------------------------------
 // InitFlow — orchestrates the 10-step first-run setup
@@ -257,10 +251,7 @@ export class InitFlow {
   // ── Private ───────────────────────────────────────────────────────────
 
   private copyTemplate(relativePath: string): void {
-    const src = path.join(TEMPLATES_DIR, relativePath);
-    const dest = path.join(this.installDir, relativePath);
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.copyFileSync(src, dest);
+    syncTemplate(TEMPLATES_DIR, this.installDir, relativePath);
   }
 
   private async installCli(): Promise<void> {
@@ -433,7 +424,7 @@ export class CLI {
         break;
 
       case "update":
-        new DockerService(this.resolveDir(dir)).update();
+        new DockerService(this.resolveDir(dir)).update(TEMPLATES_DIR);
         break;
 
       case "plugin":
