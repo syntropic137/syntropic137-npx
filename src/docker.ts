@@ -1,5 +1,4 @@
 import { execFileSync } from "node:child_process";
-import * as path from "node:path";
 import * as http from "node:http";
 import { fail, info, spinner, success, warn } from "./ui.js";
 import {
@@ -9,6 +8,7 @@ import {
   HEALTH_CHECK_INTERVAL_MS,
   CMD,
 } from "./constants.js";
+import { syncTemplate } from "./templates.js";
 
 /**
  * Parse a Docker Compose version string like "Docker Compose version v2.29.1"
@@ -86,8 +86,11 @@ export class DockerService {
     this.compose(["ps"], "inherit");
   }
 
-  /** Pull latest images and restart. */
-  update(): void {
+  /** Update compose template, pull latest images, and restart. */
+  update(templatesDir?: string): void {
+    if (templatesDir) {
+      syncTemplate(templatesDir, this.installDir, COMPOSE_FILE);
+    }
     info("Pulling latest images...");
     this.compose(["pull"], "inherit");
     info("Restarting with new images...");
