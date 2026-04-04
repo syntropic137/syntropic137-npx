@@ -1,4 +1,4 @@
-# Pinned to release v0.20.2 — image digests verified by cosign
+# Pinned to release v0.21.0 — image digests verified by cosign
 # =============================================================================
 # Syntropic137 — Self-Host Docker Compose (Published)
 # =============================================================================
@@ -172,7 +172,7 @@ services:
         max-file: "3"
     networks:
     - syn-internal
-    image: ghcr.io/syntropic137/syn-collector@sha256:f7558aa382d0e33179fb84af0b8ec3fa83d4678208d0cd21c9ee72de1d53ffa6
+    image: ghcr.io/syntropic137/syn-collector@sha256:f2bd534e23bf9dca12b7b0e586ae9cb5eeb73585ab746635c74131df3a0fe997
   docker-socket-proxy:
     image: tecnativa/docker-socket-proxy:0.3.0
     container_name: syn137-docker-socket-proxy
@@ -229,7 +229,7 @@ services:
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       SYN_WORKSPACE_CONTAINER_DIR: /workspaces
-      SYN_WORKSPACE_HOST_DIR: ${PWD}/workspaces
+      SYN_WORKSPACE_HOST_DIR: ${SYN_INSTALL_DIR:-.}/workspaces
       DOCKER_HOST: tcp://docker-socket-proxy:2375
       SYN_AGENT_NETWORK: syntropic137_selfhost_agent-net
       SYN_PROXY_URL: http://envoy-proxy:8081
@@ -293,7 +293,7 @@ services:
     networks:
     - syn-internal
     - syn-proxy
-    image: ghcr.io/syntropic137/syn-api@sha256:e1b2be1c41e59616c0ba34511cd70f039edb289c9f502f4ed570d97ae7ed6eec
+    image: ghcr.io/syntropic137/syn-api@sha256:57686082541e73e359741087c0942645156223440fcebe2878ee15bf09afc555
   gateway:
     container_name: syn137-gateway
     ports:
@@ -341,7 +341,7 @@ services:
         max-file: "3"
     networks:
     - syn-internal
-    image: ghcr.io/syntropic137/syn-gateway@sha256:ea1186b6465a3a009f2eeb88bea305946176a0d12de4c92e27fa3d91e1584bcc
+    image: ghcr.io/syntropic137/syn-gateway@sha256:c46a27915cabaa365a9c8699b1c3bb4b8a268e031228b0dd6e23986956a71fc7
   cloudflared:
     image: cloudflare/cloudflared:2026.2.0
     container_name: syn137-cloudflared
@@ -472,7 +472,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
-    image: ghcr.io/syntropic137/sidecar-proxy@sha256:03725af7427a95442d142c38593c12b4af1825bb400355dbb128178645049f87
+    image: ghcr.io/syntropic137/sidecar-proxy@sha256:730da5306c702895de8f6e8fefb4ebeb03c920f0944d95e3bed1503fa892d1ee
     container_name: syn137-envoy-proxy
     restart: always
   token-injector:
@@ -481,7 +481,7 @@ services:
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
     networks:
     - syn-internal
-    image: ghcr.io/syntropic137/token-injector@sha256:35ac67c6bbed110bec3eecdbd05500da93480dc8cf93112bef194676a9c1aac4
+    image: ghcr.io/syntropic137/token-injector@sha256:f274ae5bb53ec7594abf9e0171ca22a675fdf8346a41680817135767c598fb32
     container_name: syn137-token-injector
     restart: always
 secrets:
