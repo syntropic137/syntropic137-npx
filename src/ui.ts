@@ -299,8 +299,8 @@ const LOGO = [
  */
 export function banner(version?: string): number {
   const width = 92;
-  const versionStr = version ? dim(`v${version}`) : "";
-  const versionLen = version ? version.length + 1 : 0; // "v" + version
+  const versionStr = version ? dim(`Platform v${version}`) : "";
+  const versionLen = version ? version.length + 10 : 0; // "Platform " + "v" + version
   const subtitleText = `  ${bold("Self-Host Setup CLI")}`;
   const subtitleStripped = 2 + 19; // "  " + "Self-Host Setup CLI"
   // Pad so version sits at the right edge: width - subtitle - version - flair(2) - gap(1)
