@@ -40,15 +40,6 @@ vi.mock("./docker.js", () => ({
     update: vi.fn(),
     waitForHealth: vi.fn().mockResolvedValue(true),
   })),
-  composePull: vi.fn(),
-  composeUp: vi.fn(),
-  composeDown: vi.fn(),
-  composeStop: vi.fn(),
-  composeStart: vi.fn(),
-  composeLogs: vi.fn(),
-  composeStatus: vi.fn(),
-  composeUpdate: vi.fn(),
-  waitForHealth: vi.fn().mockResolvedValue(true),
   parseComposeVersion: vi.fn(),
 }));
 

@@ -99,9 +99,15 @@ export class InitFlow {
         if (startStack) {
           if (!this.opts.skipDocker) {
             checkDocker();
-            const docker = new DockerService(this.installDir);
-            docker.start();
-            await docker.waitForHealth();
+            try {
+              const docker = new DockerService(this.installDir);
+              docker.start();
+              await docker.waitForHealth();
+            } catch (err) {
+              warn("Could not start the stack.");
+              if (err instanceof Error) info(err.message);
+              info(`Restart manually: ${CMD.start}`);
+            }
           }
         } else {
           info(`Run \`${CMD.start}\` to start the stack, or \`${CMD.status}\` to check health.`);

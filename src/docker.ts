@@ -73,10 +73,8 @@ export class DockerService {
 
   /** Pull latest images and start the stack (creates containers if needed). */
   start(): void {
-    info("Pulling latest images...");
-    this.compose(["pull"], "inherit");
     info("Starting stack...");
-    this.compose(["up", "-d"], "inherit");
+    this.pullAndUp();
   }
 
   /** Run `docker compose logs --tail 100 -f`. */
@@ -94,10 +92,8 @@ export class DockerService {
     if (templatesDir) {
       syncTemplate(templatesDir, this.installDir, COMPOSE_FILE);
     }
-    info("Pulling latest images...");
-    this.compose(["pull"], "inherit");
-    info("Restarting with new images...");
-    this.compose(["up", "-d"], "inherit");
+    info("Updating stack...");
+    this.pullAndUp();
     success("Update complete");
   }
 
@@ -143,6 +139,12 @@ export class DockerService {
   }
 
   // ── Private ────────────────────────────────────────────────────────────
+
+  private pullAndUp(): void {
+    info("Pulling latest images...");
+    this.compose(["pull"], "inherit");
+    this.compose(["up", "-d"], "inherit");
+  }
 
   private compose(args: string[], stdio: "pipe" | "inherit"): void {
     execFileSync("docker", ["compose", "-f", COMPOSE_FILE, ...args], {
@@ -199,46 +201,3 @@ export function checkDocker(): void {
   success(`Docker Compose v${version.join(".")} detected`);
 }
 
-// ---------------------------------------------------------------------------
-// Backward-compatible free functions
-// ---------------------------------------------------------------------------
-
-export function composePull(installDir: string): void {
-  new DockerService(installDir).pull();
-}
-
-export function composeUp(installDir: string): void {
-  new DockerService(installDir).up();
-}
-
-export function composeDown(installDir: string): void {
-  new DockerService(installDir).down();
-}
-
-export function composeStop(installDir: string): void {
-  new DockerService(installDir).stop();
-}
-
-export function composeStart(installDir: string): void {
-  new DockerService(installDir).start();
-}
-
-export function composeLogs(installDir: string): void {
-  new DockerService(installDir).logs();
-}
-
-export function composeStatus(installDir: string): void {
-  new DockerService(installDir).status();
-}
-
-export function composeUpdate(installDir: string): void {
-  new DockerService(installDir).update();
-}
-
-export async function waitForHealth(
-  port: string | number = 8137,
-  timeoutMs = HEALTH_CHECK_TIMEOUT_MS,
-): Promise<boolean> {
-  // Health check doesn't need an install dir
-  return new DockerService("").waitForHealth(port, timeoutMs);
-}
