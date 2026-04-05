@@ -75,7 +75,7 @@ export class InitFlow {
   }
 
   async run(): Promise<void> {
-    banner();
+    banner(PLATFORM_VERSION);
 
     let steps = 12;
     if (this.opts.skipGithub) steps -= 1;
@@ -94,10 +94,12 @@ export class InitFlow {
       warn("Existing installation detected at " + this.installDir);
       const proceed = await confirm("Reconfigure from scratch?", false);
       if (!proceed) {
-        // Offer to just bring the stack up from existing config
-        const startStack = await confirm("Start the stack from existing config?", true);
-        if (startStack) {
-          if (!this.opts.skipDocker) {
+        if (this.opts.skipDocker) {
+          info(`Docker steps skipped (--skip-docker). Run \`${CMD.start}\` to start the stack manually.`);
+        } else {
+          // Offer to just bring the stack up from existing config
+          const startStack = await confirm("Start the stack from existing config?", true);
+          if (startStack) {
             checkDocker();
             try {
               const docker = new DockerService(this.installDir);
@@ -108,9 +110,9 @@ export class InitFlow {
               if (err instanceof Error) info(err.message);
               info(`Restart manually: ${CMD.start}`);
             }
+          } else {
+            info(`Run \`${CMD.start}\` to start the stack, or \`${CMD.status}\` to check health.`);
           }
-        } else {
-          info(`Run \`${CMD.start}\` to start the stack, or \`${CMD.status}\` to check health.`);
         }
         return;
       }

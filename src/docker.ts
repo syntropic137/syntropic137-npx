@@ -141,9 +141,8 @@ export class DockerService {
   // ── Private ────────────────────────────────────────────────────────────
 
   private pullAndUp(): void {
-    info("Pulling latest images...");
-    this.compose(["pull"], "inherit");
-    this.compose(["up", "-d"], "inherit");
+    this.pull();
+    this.up();
   }
 
   private compose(args: string[], stdio: "pipe" | "inherit"): void {
