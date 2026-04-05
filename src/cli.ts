@@ -100,7 +100,18 @@ export class InitFlow {
       warn("Existing installation detected at " + this.installDir);
       const proceed = await confirm("Reconfigure from scratch?", false);
       if (!proceed) {
-        info(`Skipping. Run \`${CMD.status}\` to check your stack.`);
+        // Offer to just bring the stack up from existing config
+        const startStack = await confirm("Start the stack from existing config?", true);
+        if (startStack) {
+          if (!this.opts.skipDocker) {
+            checkDocker();
+            const docker = new DockerService(this.installDir);
+            docker.start();
+            await docker.waitForHealth();
+          }
+        } else {
+          info(`Run \`${CMD.start}\` to start the stack, or \`${CMD.status}\` to check health.`);
+        }
         return;
       }
       reconfigure = true;
@@ -642,7 +653,7 @@ export class CLI {
   // ── Interactive menu ──────────────────────────────────────────────────
 
   private async showMenu(): Promise<CliOptions["command"]> {
-    banner(VERSION);
+    banner(PLATFORM_VERSION);
     // Flair target = subtitle line in banner. From the save point (after title+blank),
     // count up: blank(1) + title(1) + blank-after-banner(1) + bottom-border(1) + subtitle(1) = 5
     const flairLinesAboveSave = 5;

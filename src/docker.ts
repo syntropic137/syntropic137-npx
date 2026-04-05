@@ -71,9 +71,12 @@ export class DockerService {
     this.compose(["stop"], "inherit");
   }
 
-  /** Run `docker compose start`. */
+  /** Pull latest images and start the stack (creates containers if needed). */
   start(): void {
-    this.compose(["start"], "inherit");
+    info("Pulling latest images...");
+    this.compose(["pull"], "inherit");
+    info("Starting stack...");
+    this.compose(["up", "-d"], "inherit");
   }
 
   /** Run `docker compose logs --tail 100 -f`. */
