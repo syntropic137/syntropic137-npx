@@ -78,13 +78,23 @@ jobs:
 
           PACKAGE_VERSION="@syntropic137/setup@$VERSION"
 
-          # `if` neutralizes the non-zero exit under set -e
-          if npm view "$PACKAGE_VERSION" version > /dev/null 2>&1; then
+          # `|| true` prevents set -e from aborting before $? is captured
+          NPM_VIEW_OUTPUT=$(npm view "$PACKAGE_VERSION" version 2>&1) || true
+          NPM_VIEW_STATUS=${PIPESTATUS[0]:-$?}
+
+          if [ -n "$NPM_VIEW_OUTPUT" ] && ! printf '%s\n' "$NPM_VIEW_OUTPUT" | grep -q 'E404'; then
+            # npm view succeeded and returned a version — already published
             echo "⚠️ Version $VERSION already published to npm — skipping"
             echo "already_published=true" >> "$GITHUB_OUTPUT"
-          else
+          elif [ -z "$NPM_VIEW_OUTPUT" ] || printf '%s\n' "$NPM_VIEW_OUTPUT" | grep -q 'E404'; then
+            # Empty output (version missing) or E404 (package missing)
             echo "✅ Version $VERSION not yet on npm — will publish"
             echo "already_published=false" >> "$GITHUB_OUTPUT"
+          else
+            # Genuine error (network, auth, rate limit)
+            printf '%s\n' "$NPM_VIEW_OUTPUT" >&2
+            echo "❌ Failed to check npm registry" >&2
+            exit 1
           fi
 
       - name: Publish with provenance
