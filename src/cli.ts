@@ -75,8 +75,6 @@ export class InitFlow {
   }
 
   async run(): Promise<void> {
-    banner(PLATFORM_VERSION);
-
     let steps = 12;
     if (this.opts.skipGithub) steps -= 1;
     if (this.opts.skipDocker) steps -= 3;
@@ -415,8 +413,14 @@ export class CLI {
   async run(): Promise<void> {
     let command = this.opts.command;
 
-    if (command === "menu") {
+    const fromMenu = command === "menu";
+    if (fromMenu) {
       command = await this.showMenu();
+    }
+
+    // Show banner on direct CLI invocations (menu already shows its own)
+    if (!fromMenu) {
+      banner(PLATFORM_VERSION);
     }
 
     const dir = this.opts.dir || DEFAULT_INSTALL_DIR;
@@ -662,8 +666,8 @@ export class CLI {
   private async showMenu(): Promise<CliOptions["command"]> {
     banner(PLATFORM_VERSION);
     // Flair target = subtitle line in banner. From the save point (after title+blank),
-    // count up: blank(1) + title(1) + blank-after-banner(1) + bottom-border(1) + subtitle(1) = 5
-    const flairLinesAboveSave = 5;
+    // count up: blank(1) + title(1) + blank-after-banner(1) + bottom-border(1) + url(1) + subtitle(1) = 6
+    const flairLinesAboveSave = 6;
     const menuItems: MenuItem[] = COMMANDS.map((c) => ({
       label: c.name,
       value: c.name,

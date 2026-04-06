@@ -40,10 +40,10 @@ export const COMMANDS: readonly CommandDef[] = [
   { name: "stop",   description: "Stop the stack" },
   { name: "logs",   description: "Tail container logs" },
   { name: "update", description: "Pull latest images and restart" },
+  { name: "cli",    description: "Install or update the Syntropic137 CLI" },
   { name: "plugin", description: "Install or update the Claude Code plugin" },
   { name: "github-app", description: "Open GitHub App settings in your browser" },
   { name: "tunnel", description: "Set up remote access (Cloudflare tunnel)" },
-  { name: "cli",    description: "Install or update the Syntropic137 CLI" },
 ] as const;
 
 /** Shorthand lookup: CMD.init → "npx @syntropic137/setup init" */

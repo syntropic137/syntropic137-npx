@@ -116,7 +116,7 @@ services:
         max-file: "3"
     networks:
     - syn-internal
-    image: ghcr.io/syntropic137/event-store@sha256:0c18a4ca65f3a26117983a7063baae23f62dd833fa15a2371d46fcb92b71c9c8
+    image: ghcr.io/syntropic137/event-store@sha256:ce3f8281c1c5474fcb4c960f718dba5270fa861c92509ac5670232a3bb9eccd9
   collector:
     environment:
       EVENT_COLLECTOR_PORT: "8080"
