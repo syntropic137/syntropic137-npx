@@ -80,18 +80,22 @@ jobs:
           NPM_VIEW_OUTPUT=$(npm view "$PACKAGE_VERSION" version 2>&1)
           NPM_VIEW_STATUS=$?
 
-          if [ "$NPM_VIEW_STATUS" -eq 0 ]; then
+          if [ "$NPM_VIEW_STATUS" -eq 0 ] && [ -n "$NPM_VIEW_OUTPUT" ]; then
             printf '%s\n' "$NPM_VIEW_OUTPUT"
             echo "⚠️ Version $VERSION already published to npm — skipping"
             echo "already_published=true" >> "$GITHUB_OUTPUT"
-          elif printf '%s\n' "$NPM_VIEW_OUTPUT" | grep -q 'E404'; then
-            printf '%s\n' "$NPM_VIEW_OUTPUT"
-            echo "✅ Version $VERSION not yet on npm — will publish"
-            echo "already_published=false" >> "$GITHUB_OUTPUT"
-          else
+          elif [ "$NPM_VIEW_STATUS" -ne 0 ] && \
+               printf '%s\n' "$NPM_VIEW_OUTPUT" | grep -qiE 'ENETWORK|ETIMEOUT|EAUTH|ENEEDAUTH|ERR_SOCKET'; then
+            # Genuine connectivity or auth error — fail loudly
             printf '%s\n' "$NPM_VIEW_OUTPUT" >&2
             echo "❌ Failed to check whether $PACKAGE_VERSION is already published" >&2
-            exit "$NPM_VIEW_STATUS"
+            exit 1
+          else
+            # npm view returned non-zero or empty output — version not on registry.
+            # This covers E404 (package missing), empty output (version missing),
+            # and any other "not found" variant across npm versions.
+            echo "✅ Version $VERSION not yet on npm — will publish"
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Publish with provenance
