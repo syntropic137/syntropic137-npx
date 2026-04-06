@@ -1,4 +1,4 @@
-# Pinned to release v0.21.4 — image digests verified by cosign
+# Pinned to release v0.21.6 — image digests verified by cosign
 # =============================================================================
 # Syntropic137 — Self-Host Docker Compose (Published)
 # =============================================================================
@@ -116,8 +116,11 @@ services:
         max-file: "3"
     networks:
     - syn-internal
-    image: ghcr.io/syntropic137/event-store@sha256:ce3f8281c1c5474fcb4c960f718dba5270fa861c92509ac5670232a3bb9eccd9
+    image: ghcr.io/syntropic137/event-store@sha256:4f21e2eb1f98c7420371116d237e674ff251626950949f22ec2479700f61415c
   collector:
+    networks:
+    - syn-internal
+    - agent-net
     environment:
       EVENT_COLLECTOR_PORT: "8080"
       SYN_OBSERVABILITY_DB_URL: postgres://${POSTGRES_USER:-syn}:${POSTGRES_PASSWORD:-syn_dev_password}@timescaledb:5432/${POSTGRES_DB:-syn}
@@ -170,10 +173,7 @@ services:
       options:
         max-size: 10m
         max-file: "3"
-    networks:
-    - syn-internal
-    - agent-net  # Workspace containers push OTLP metrics here (receive-only, no secrets)
-    image: ghcr.io/syntropic137/syn-collector@sha256:3aaa30bdbef94cbc55bce10e6e9079270137432fb16dd0c85f7d9dd0a25fa1ba
+    image: ghcr.io/syntropic137/syn-collector@sha256:e6dc3bce1c3062ab175b1f337856a551b7363a050b0dd5cafe1bc12c5024af27
   docker-socket-proxy:
     image: tecnativa/docker-socket-proxy:0.3.0
     container_name: syn137-docker-socket-proxy
@@ -246,6 +246,8 @@ services:
         condition: service_healthy
       docker-socket-proxy:
         condition: service_started
+      minio:
+        condition: service_healthy
     healthcheck:
       test:
       - CMD-SHELL
@@ -294,7 +296,7 @@ services:
     networks:
     - syn-internal
     - syn-proxy
-    image: ghcr.io/syntropic137/syn-api@sha256:f269676f75bd4620074a03d04dcaace06382e7d4c584363d47c86628c64cffbe
+    image: ghcr.io/syntropic137/syn-api@sha256:c961e75d53cef089af422da7f0ce3758f37776f9c131d5f4e99a22f8fd827036
   gateway:
     container_name: syn137-gateway
     ports:
@@ -342,7 +344,7 @@ services:
         max-file: "3"
     networks:
     - syn-internal
-    image: ghcr.io/syntropic137/syn-gateway@sha256:0cc503a83dd812c235fcb95168e14424f45aebb945939b3f1f5ede9309a126c8
+    image: ghcr.io/syntropic137/syn-gateway@sha256:42e40e37dbff7f16b6a6ea9e08739e54b0c8e6030b6e9c090bef9682d7e29cdb
   cloudflared:
     image: cloudflare/cloudflared:2026.2.0
     container_name: syn137-cloudflared
@@ -394,8 +396,6 @@ services:
     - export MINIO_ROOT_PASSWORD="$(cat /run/secrets/minio_password)" && exec minio server /data --console-address ':9001'
     secrets:
     - minio_password
-    ports:
-    - 127.0.0.1:9000:9000
     volumes:
     - minio_data:/data
     restart: always
@@ -473,7 +473,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
-    image: ghcr.io/syntropic137/sidecar-proxy@sha256:b90fd7f0ce67f71bb7f4919c3fb2a0cb45b0bf684f3bae19d8be1387b895e61a
+    image: ghcr.io/syntropic137/sidecar-proxy@sha256:5122dfd7b5260ae77206eda7eac77dfed726e2f22e9c4aa608f782cb584af2a4
     container_name: syn137-envoy-proxy
     restart: always
   token-injector:
@@ -482,7 +482,7 @@ services:
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
     networks:
     - syn-internal
-    image: ghcr.io/syntropic137/token-injector@sha256:bfa99e21abd084b725fbd7a29c87811d2d5e6c9fe6b0a5c9366d3982f45b03c1
+    image: ghcr.io/syntropic137/token-injector@sha256:3caa2cd69962dd816ba1c9c6c4c4367f7d8cc1448cef9387500c193e319a756e
     container_name: syn137-token-injector
     restart: always
 secrets:
