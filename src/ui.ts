@@ -315,6 +315,10 @@ export function banner(version?: string): number {
   }
   console.log(boxLine("", width)); lines++;
   console.log(boxLine(subtitle, width)); lines++;
+  const url = dim("https://syntropic137.com");
+  const urlStripped = 23; // "https://syntropic137.com"
+  const urlGap = Math.max(1, width - urlStripped - 2);
+  console.log(boxLine(`${" ".repeat(urlGap + 2)}${url}`, width)); lines++;
   console.log(`  ${dim(BOX.bl + BOX.h.repeat(width + 2) + BOX.br)}`); lines++;
   console.log(); lines++;
   return lines;
