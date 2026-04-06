@@ -70,16 +70,28 @@ jobs:
         run: npm pack --dry-run
 
       - name: Check if version already published
+        if: ${{ !inputs.dry_run }}
         id: check
         run: |
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if npm view "@syntropic137/setup@$VERSION" version 2>/dev/null; then
+
+          PACKAGE_VERSION="@syntropic137/setup@$VERSION"
+          NPM_VIEW_OUTPUT=$(npm view "$PACKAGE_VERSION" version 2>&1)
+          NPM_VIEW_STATUS=$?
+
+          if [ "$NPM_VIEW_STATUS" -eq 0 ]; then
+            printf '%s\n' "$NPM_VIEW_OUTPUT"
             echo "⚠️ Version $VERSION already published to npm — skipping"
             echo "already_published=true" >> "$GITHUB_OUTPUT"
-          else
+          elif printf '%s\n' "$NPM_VIEW_OUTPUT" | grep -q 'E404'; then
+            printf '%s\n' "$NPM_VIEW_OUTPUT"
             echo "✅ Version $VERSION not yet on npm — will publish"
             echo "already_published=false" >> "$GITHUB_OUTPUT"
+          else
+            printf '%s\n' "$NPM_VIEW_OUTPUT" >&2
+            echo "❌ Failed to check whether $PACKAGE_VERSION is already published" >&2
+            exit "$NPM_VIEW_STATUS"
           fi
 
       - name: Publish with provenance

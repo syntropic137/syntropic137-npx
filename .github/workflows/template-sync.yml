@@ -21,9 +21,9 @@
 # Versioning rules:
 #   - platformVersion = the syntropic release these templates came from
 #   - version = npm publish version (may drift ahead due to npx-only changes)
-#   - version.major.minor >= platformVersion.major.minor, always
+#   - version >= platformVersion, always
 #   - If platform bumps major or minor: version resets to platform version
-#   - Same major.minor: version always increments patch by 1 (never resets to platform patch)
+#   - Same major.minor: version = max(current_patch + 1, platform_patch)
 #   - NPX patch can be ahead of platform patch (npx-only features) — that's fine
 
 name: Template Sync
@@ -138,10 +138,14 @@ jobs:
             # Platform bumped major or minor — reset to platform version
             NEW_VERSION="$PLATFORM"
           else
-            # Same major.minor — always increment patch by 1.
-            # NPX patch may already be ahead of platform (npx-only features),
-            # so we never reset to platform patch.
-            NEW_VERSION="${C_MAJOR}.${C_MINOR}.$((C_PATCH + 1))"
+            # Same major.minor — take the higher of (current+1, platform patch).
+            # NPX patch may be ahead (npx-only features) or behind (platform
+            # jumped multiple patches). Either way, result >= both.
+            NEXT_PATCH=$((C_PATCH + 1))
+            if [[ "$P_PATCH" -gt "$NEXT_PATCH" ]]; then
+              NEXT_PATCH="$P_PATCH"
+            fi
+            NEW_VERSION="${C_MAJOR}.${C_MINOR}.${NEXT_PATCH}"
           fi
 
           # Update platformVersion in package.json
