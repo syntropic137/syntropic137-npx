@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { parseComposeVersion, checkDocker } from "./docker.js";
+import { parseComposeVersion, checkDocker, DockerService } from "./docker.js";
 
 // Mock UI to silence output
 vi.mock("./ui.js", () => ({
@@ -8,6 +8,11 @@ vi.mock("./ui.js", () => ({
   success: vi.fn(),
   warn: vi.fn(),
   spinner: vi.fn(() => ({ stop: vi.fn(), update: vi.fn() })),
+}));
+
+// Mock templates
+vi.mock("./templates.js", () => ({
+  syncTemplate: vi.fn(),
 }));
 
 // Mock child_process
@@ -102,5 +107,35 @@ describe("checkDocker", () => {
 
     expect(() => checkDocker()).toThrow("process.exit");
     expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+});
+
+describe("DockerService.start", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockExecFileSync.mockReturnValue(Buffer.from(""));
+  });
+
+  it("runs pull then up -d", () => {
+    const docker = new DockerService("/tmp/test");
+    docker.start();
+
+    const calls = mockExecFileSync.mock.calls;
+    const composeArgs = calls.map((c) => (c[1] as string[]).slice(3)); // strip ["compose", "-f", FILE]
+    expect(composeArgs).toEqual([["pull"], ["up", "-d"]]);
+  });
+
+  it("exits if pull fails", () => {
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => {
+      throw new Error("process.exit");
+    }) as never);
+
+    mockExecFileSync.mockImplementation(() => {
+      throw new Error("network error");
+    });
+
+    const docker = new DockerService("/tmp/test");
+    expect(() => docker.start()).toThrow("process.exit");
+    exitSpy.mockRestore();
   });
 });
