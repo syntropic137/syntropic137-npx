@@ -1,4 +1,4 @@
-# Pinned to release v0.22.0 — image digests verified by cosign
+# Pinned to release v0.22.1 — image digests verified by cosign
 # =============================================================================
 # Syntropic137 — Self-Host Docker Compose (Published)
 # =============================================================================
@@ -173,7 +173,7 @@ services:
       options:
         max-size: 10m
         max-file: "3"
-    image: ghcr.io/syntropic137/syn-collector@sha256:3d0c21309f1518cc54ec7815d927e9f8aa6d0c7ef48749d43b447216ae309748
+    image: ghcr.io/syntropic137/syn-collector@sha256:c3ba0dc098802cdc687df434e7616227fcae28f0d6652752180c7227b3397ab9
   docker-socket-proxy:
     image: tecnativa/docker-socket-proxy:0.3.0
     container_name: syn137-docker-socket-proxy
@@ -296,7 +296,7 @@ services:
     networks:
     - syn-internal
     - syn-proxy
-    image: ghcr.io/syntropic137/syn-api@sha256:a629fd1c22106453878e6a3bdf71c6755b780f9eed7e7c34984794f8d6bbb130
+    image: ghcr.io/syntropic137/syn-api@sha256:a4751f9166a941b0596b24e9d4b6acd837bbec4afa226ac55c4238ca90009a82
   gateway:
     container_name: syn137-gateway
     ports:
@@ -344,7 +344,7 @@ services:
         max-file: "3"
     networks:
     - syn-internal
-    image: ghcr.io/syntropic137/syn-gateway@sha256:8b49fac42fabd9da7b3c39afb0845682af3738094f8b9592a35c0ea76e17e43b
+    image: ghcr.io/syntropic137/syn-gateway@sha256:fbaaecad2b50e163857fc587c7b1e3b32f7e06beeebcadd98ec71aeeb03998b1
   cloudflared:
     image: cloudflare/cloudflared:2026.2.0
     container_name: syn137-cloudflared
@@ -473,7 +473,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
-    image: ghcr.io/syntropic137/sidecar-proxy@sha256:d71a49a841b2b5d63fc579ab76e893ef06fb9510446cf5115fa6343679d51ff5
+    image: ghcr.io/syntropic137/sidecar-proxy@sha256:76d484877d5d0bf9e2787a11f953137ce7ee84aaff5a1d6c0ac17f8f6e022444
     container_name: syn137-envoy-proxy
     restart: always
   token-injector:
@@ -482,7 +482,7 @@ services:
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
     networks:
     - syn-internal
-    image: ghcr.io/syntropic137/token-injector@sha256:85c7a9a50d89115300835f89893ede376ec74634eb146c7e9c19646f2428ea5b
+    image: ghcr.io/syntropic137/token-injector@sha256:a2f46a9a9414ef0d2fb829494a0992e71d73e46aa97ac8c79b191857cb1d1fbb
     container_name: syn137-token-injector
     restart: always
 secrets:
