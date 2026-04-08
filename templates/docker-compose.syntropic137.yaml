@@ -1,4 +1,4 @@
-# Pinned to release v0.22.3 — image digests verified by cosign
+# Pinned to release v0.23.0 — image digests verified by cosign
 # =============================================================================
 # Syntropic137 — Self-Host Docker Compose (Published)
 # =============================================================================
@@ -116,7 +116,7 @@ services:
         max-file: "3"
     networks:
     - syn-internal
-    image: ghcr.io/syntropic137/event-store@sha256:375ec0fa28ad8ab805ac0c47176197af57a7d91612205f05fe5e640d03c74f47
+    image: ghcr.io/syntropic137/event-store@sha256:fda6ed2e836bdfcc78fba200f228322978839cba9ee4bb374ac2ed3b1869a4d5
   collector:
     networks:
     - syn-internal
@@ -173,7 +173,7 @@ services:
       options:
         max-size: 10m
         max-file: "3"
-    image: ghcr.io/syntropic137/syn-collector@sha256:16d47a1b333d6f8958ded0b16e49ec2c60a7c44fa84d770f2f7b8bbe627e9a68
+    image: ghcr.io/syntropic137/syn-collector@sha256:8cde324622538c25d0c5249c916bfd66b28a3a317d8a3f721102a135d273bbfc
   docker-socket-proxy:
     image: tecnativa/docker-socket-proxy:0.3.0
     container_name: syn137-docker-socket-proxy
@@ -296,7 +296,7 @@ services:
     networks:
     - syn-internal
     - syn-proxy
-    image: ghcr.io/syntropic137/syn-api@sha256:143c123699de5fe4888b69adacb5c39580b3f3c6727d16413ea02ccd4587668c
+    image: ghcr.io/syntropic137/syn-api@sha256:9f4bca4e8a595cc2272321fc12f7ef6944fe549f5775071f95e86c6685d6461d
   gateway:
     container_name: syn137-gateway
     ports:
@@ -344,7 +344,7 @@ services:
         max-file: "3"
     networks:
     - syn-internal
-    image: ghcr.io/syntropic137/syn-gateway@sha256:faccb4cb83dd076695e0f226d763455a2e8baefe9aa474d855daf264c44a6a49
+    image: ghcr.io/syntropic137/syn-gateway@sha256:c7e4eba2c7d95d34b6ec5de7449f80bbcefa3b145cdffae9abcead55b564fa4d
   cloudflared:
     image: cloudflare/cloudflared:2026.2.0
     container_name: syn137-cloudflared
@@ -473,7 +473,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
-    image: ghcr.io/syntropic137/sidecar-proxy@sha256:7bf1712d0538480aad4722e8155583367f77ed1472c058ef1a28db074a22d14b
+    image: ghcr.io/syntropic137/sidecar-proxy@sha256:5235deff5d92ce5ac2ad59a91b23987152424877ddf1ec2fec9be0f9de61c7fd
     container_name: syn137-envoy-proxy
     restart: always
   token-injector:
@@ -482,7 +482,7 @@ services:
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
     networks:
     - syn-internal
-    image: ghcr.io/syntropic137/token-injector@sha256:c7b9064f64066cbcf2f8493765911d9bef1645605086b07b0644479c44de8ac1
+    image: ghcr.io/syntropic137/token-injector@sha256:63ad2f5c88aae7a88003fd1794d1f3265c6c3a033999923d7fc037c358691263
     container_name: syn137-token-injector
     restart: always
 secrets:
