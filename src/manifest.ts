@@ -119,14 +119,16 @@ function apiRequest(url: string, method = "POST", data?: string): Promise<Record
 // ---------------------------------------------------------------------------
 
 export function openBrowser(url: string): void {
-  const noop = () => {};
+  // Fire-and-forget: ignore stdio and swallow errors so a missing helper
+  // (e.g. xdg-open on minimal Linux) never crashes or hangs the CLI.
+  const opts = { stdio: "ignore" as const };
   if (process.platform === "darwin") {
-    execFile("open", [url], noop);
+    spawn("open", [url], opts).on("error", () => {}).unref();
   } else if (process.platform === "win32") {
     // `start` is a shell builtin — use cmd.exe with the URL as a separate arg
-    spawn("cmd.exe", ["/c", "start", "", url], { stdio: "ignore" }).unref();
+    spawn("cmd.exe", ["/c", "start", "", url], opts).on("error", () => {}).unref();
   } else {
-    execFile("xdg-open", [url], noop);
+    spawn("xdg-open", [url], opts).on("error", () => {}).unref();
   }
 }
 

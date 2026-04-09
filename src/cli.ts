@@ -175,13 +175,14 @@ export class InitFlow {
     const existingOauth = process.env.CLAUDE_CODE_OAUTH_TOKEN || "";
 
     if (existingOauth) {
-      info("Found CLAUDE_CODE_OAUTH_TOKEN in environment");
+      info("Found credentials in environment");
       envValues[ENV_KEYS.CLAUDE_CODE_OAUTH_TOKEN] = existingOauth;
     } else if (existingKey) {
       info("Found ANTHROPIC_API_KEY in environment");
       envValues[ENV_KEYS.ANTHROPIC_API_KEY] = existingKey;
     } else {
-      info("An Anthropic API key or Claude Code OAuth token is required.");
+      info("Anthropic credentials are required to run agents.");
+      info("Enter your Anthropic API key, or set ANTHROPIC_API_KEY in your environment.");
       info("Get a key at: https://console.anthropic.com/settings/keys");
       const apiKey = await promptSecret(ENV_KEYS.ANTHROPIC_API_KEY);
       if (apiKey) {
@@ -196,6 +197,7 @@ export class InitFlow {
       step("Setting up GitHub App");
       console.log();
       info("This creates a GitHub App so Syntropic137 can interact with your repos.");
+      info("Make sure you are logged in to GitHub before clicking Create.");
       info("A browser window will open — approve the app, then return here.");
       console.log();
 
