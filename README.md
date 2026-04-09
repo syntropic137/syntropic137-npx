@@ -10,7 +10,7 @@ npx @syntropic137/setup init
 
 ## What it does
 
-The `init` command walks you through a 10-step interactive setup:
+The `init` command walks you through a 12-step interactive setup:
 
 1. **Check Docker:** verifies Docker and Compose v2.20+ are installed and running
 2. **Create directory:** sets up `~/.syntropic137/` with the required structure

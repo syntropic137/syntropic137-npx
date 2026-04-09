@@ -119,14 +119,13 @@ function apiRequest(url: string, method = "POST", data?: string): Promise<Record
 // ---------------------------------------------------------------------------
 
 export function openBrowser(url: string): void {
-  const noop = () => {};
   if (process.platform === "darwin") {
-    execFile("open", [url], noop);
+    execFile("open", [url]).unref();
   } else if (process.platform === "win32") {
     // `start` is a shell builtin — use cmd.exe with the URL as a separate arg
     spawn("cmd.exe", ["/c", "start", "", url], { stdio: "ignore" }).unref();
   } else {
-    execFile("xdg-open", [url], noop);
+    execFile("xdg-open", [url]).unref();
   }
 }
 

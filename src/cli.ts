@@ -167,7 +167,7 @@ export class InitFlow {
     const existingOauth = process.env.CLAUDE_CODE_OAUTH_TOKEN || "";
 
     if (existingOauth) {
-      info("Found CLAUDE_CODE_OAUTH_TOKEN in environment");
+      info("Found credentials in environment");
       envValues.CLAUDE_CODE_OAUTH_TOKEN = existingOauth;
     } else if (existingKey) {
       info("Found ANTHROPIC_API_KEY in environment");
@@ -801,14 +801,8 @@ const entryArg = process.argv[1] ?? "";
 const isDirectRun =
   entryArg.endsWith("cli.js") || entryArg.endsWith("syntropic137");
 if (isDirectRun) {
-  main()
-    .then(() => {
-      // Flush stdout before exiting to avoid truncating buffered output,
-      // then force exit to clear any lingering async handles (e.g. open-browser child).
-      process.stdout.write("", () => process.exit(0));
-    })
-    .catch((err) => {
-      fail(err instanceof Error ? err.message : String(err));
-      process.exit(1);
-    });
+  main().catch((err) => {
+    fail(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  });
 }
