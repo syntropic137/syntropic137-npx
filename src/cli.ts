@@ -802,7 +802,11 @@ const isDirectRun =
   entryArg.endsWith("cli.js") || entryArg.endsWith("syntropic137");
 if (isDirectRun) {
   main()
-    .then(() => process.exit(0))
+    .then(() => {
+      // Flush stdout before exiting to avoid truncating buffered output,
+      // then force exit to clear any lingering async handles (e.g. open-browser child).
+      process.stdout.write("", () => process.exit(0));
+    })
     .catch((err) => {
       fail(err instanceof Error ? err.message : String(err));
       process.exit(1);

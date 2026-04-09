@@ -128,35 +128,43 @@ export function promptSecret(question: string): Promise<string> {
   return new Promise((resolve) => {
     const stdin = process.stdin;
     const wasRaw = stdin.isRaw;
-    // Set raw mode BEFORE anything reads from stdin to prevent readline's
-    // echo layer from exposing pasted secrets during the setup window.
+    // Set raw mode BEFORE resuming stdin to prevent any echo layer from
+    // exposing pasted secrets before the data listener takes over.
     if (stdin.setRawMode) stdin.setRawMode(true);
-    stdin.resume();
     process.stdout.write(`  ${cyan("  ?")} ${question}: `);
     let value = "";
     const onData = (ch: Buffer) => {
-      const c = ch.toString();
-      if (c === "\n" || c === "\r") {
-        if (stdin.setRawMode) stdin.setRawMode(wasRaw ?? false);
-        stdin.removeListener("data", onData);
-        stdin.pause();
-        process.stdout.write("\n");
-        resolve(value);
-      } else if (c === "\u0003") {
-        // Ctrl+C
-        process.exit(1);
-      } else if (c === "\u007f" || c === "\b") {
-        // Backspace
-        if (value.length > 0) {
-          value = value.slice(0, -1);
-          process.stdout.write("\b \b");
+      // Iterate char-by-char: pasted input arrives as multi-char chunks.
+      for (const c of ch.toString()) {
+        if (c === "\n" || c === "\r") {
+          if (stdin.setRawMode) stdin.setRawMode(wasRaw ?? false);
+          stdin.removeListener("data", onData);
+          stdin.pause();
+          process.stdout.write("\n");
+          resolve(value);
+          return;
+        } else if (c === "\u0003") {
+          // Ctrl+C — restore terminal state before exiting
+          if (stdin.setRawMode) stdin.setRawMode(wasRaw ?? false);
+          stdin.removeListener("data", onData);
+          stdin.pause();
+          process.stdout.write("\n");
+          process.exit(1);
+        } else if (c === "\u007f" || c === "\b") {
+          // Backspace
+          if (value.length > 0) {
+            value = value.slice(0, -1);
+            process.stdout.write("\b \b");
+          }
+        } else {
+          value += c;
+          process.stdout.write("*");
         }
-      } else {
-        value += c;
-        process.stdout.write("*");
       }
     };
+    // Attach listener before resuming so no data events are missed.
     stdin.on("data", onData);
+    stdin.resume();
   });
 }
 
