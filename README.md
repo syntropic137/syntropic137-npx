@@ -12,16 +12,16 @@ npx @syntropic137/setup init
 
 The `init` command walks you through a 10-step interactive setup:
 
-1. **Check Docker**  - verifies Docker and Compose v2.20+ are installed and running
-2. **Create directory**  - sets up `~/.syntropic137/` with the required structure
-3. **Copy templates**  - writes the Docker Compose file, entrypoint script, env template, and database init SQL
-4. **Generate secrets**  - creates cryptographically random passwords for Postgres, Redis, and MinIO (chmod 600)
-5. **Configure LLM provider**  - prompts for your Anthropic API key (or picks up `ANTHROPIC_API_KEY` from your environment)
-6. **GitHub App setup**  - runs the [GitHub App Manifest flow](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest) to create a GitHub App with the right permissions in one click (optional, skippable)
-7. **Write .env**  - renders the final configuration from your answers
-8. **Pull images**  - `docker compose pull` from GHCR
-9. **Start services**  - `docker compose up -d`
-10. **Health check**  - polls `http://localhost:8137/health` until the stack is ready
+1. **Check Docker:** verifies Docker and Compose v2.20+ are installed and running
+2. **Create directory:** sets up `~/.syntropic137/` with the required structure
+3. **Copy templates:** writes the Docker Compose file, entrypoint script, env template, and database init SQL
+4. **Generate secrets:** creates cryptographically random passwords for Postgres, Redis, and MinIO (chmod 600)
+5. **Configure LLM provider:** prompts for your Anthropic API key (or picks up `ANTHROPIC_API_KEY` from your environment)
+6. **GitHub App setup:** runs the [GitHub App Manifest flow](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest) to create a GitHub App with the right permissions in one click (optional, skippable)
+7. **Write .env:** renders the final configuration from your answers
+8. **Pull images:** `docker compose pull` from GHCR
+9. **Start services:** `docker compose up -d`
+10. **Health check:** polls `http://localhost:8137/health` until the stack is ready
 
 When it's done, you have a running Syntropic137 instance at `http://localhost:8137`.
 
@@ -54,17 +54,17 @@ All commands accept `--dir <path>` if your install directory isn't the default.
 
 ## How the GitHub App Manifest flow works
 
-When you don't pass `--skip-github`, the CLI creates a GitHub App automatically:
+When you don't pass `--skip-github`, the CLI creates a GitHub App automatically. Make sure you are logged in to GitHub before the browser opens.
 
 1. A local HTTP server starts on a random port (bound to `127.0.0.1` only)
 2. Your browser opens to a local page that auto-submits a form to GitHub with the app manifest (permissions, events, callback URL)
-3. GitHub shows you a "Create App" confirmation page  - you click Create
+3. GitHub shows you a "Create App" confirmation page, then you click Create
 4. GitHub redirects back to the local server with a temporary code
 5. The CLI exchanges that code for the app's credentials (private key, webhook secret, client secret) via the GitHub API
 6. Credentials are saved to `~/.syntropic137/secrets/` with chmod 600
 7. Your browser opens the app's installation page so you can choose which repos to grant access
 
-The private key (PEM) is mounted into containers as a Docker secret (tmpfs-backed, never written to the container filesystem). Installation IDs are resolved dynamically at runtime  - the app can be installed across multiple orgs and repos.
+The private key (PEM) is mounted into containers as a Docker secret (tmpfs-backed, never written to the container filesystem). Installation IDs are resolved dynamically at runtime, so the app can be installed across multiple orgs and repos.
 
 ## What gets installed
 
@@ -111,12 +111,12 @@ Optional: Cloudflare Tunnel (set `COMPOSE_PROFILES=tunnel` in `.env` for remote 
 
 This repo is the supply chain entry point for every `npx @syntropic137/setup` user. It is deliberately isolated from the main platform repo. See [SECURITY.md](./SECURITY.md) for the full threat model.
 
-- **Zero runtime dependencies**  - Node 18+ stdlib only. Nothing to hijack in the dependency tree.
-- **Separate repo from the platform**  - compromising the main Syntropic137 repo does not grant npm publish access. The cross-repo dispatch token can trigger workflow runs here but cannot push code, merge PRs, or alter what gets published.
-- **Publish only deploys reviewed code**  - npm publish deploys whatever is on `main`. Since the dispatch token has no write access to repository contents, it cannot inject malicious code into the publish pipeline. The only path to `main` is through a human-reviewed PR.
-- **Trusted Publishing (OIDC)**  - no npm token is stored anywhere. Every published version includes a signed [provenance attestation](https://docs.npmjs.com/generating-provenance-statements) linking it to the exact commit and workflow run. Verify with `npm audit signatures`.
-- **Secrets never in .env**  - passwords and keys are stored as separate files (chmod 600) and mounted as Docker secrets (tmpfs-backed, never on the container filesystem).
-- **No auto-publish**  - npm releases require a manual `workflow_dispatch` trigger. Template syncs from upstream open a PR but never auto-merge or auto-publish.
+- **Zero runtime dependencies:** Node 18+ stdlib only. Nothing to hijack in the dependency tree.
+- **Separate repo from the platform:** compromising the main Syntropic137 repo does not grant npm publish access. The cross-repo dispatch token can trigger workflow runs here but cannot push code, merge PRs, or alter what gets published.
+- **Publish only deploys reviewed code:** npm publish deploys whatever is on `main`. Since the dispatch token has no write access to repository contents, it cannot inject malicious code into the publish pipeline. The only path to `main` is through a human-reviewed PR.
+- **Trusted Publishing (OIDC):** no npm token is stored anywhere. Every published version includes a signed [provenance attestation](https://docs.npmjs.com/generating-provenance-statements) linking it to the exact commit and workflow run. Verify with `npm audit signatures`.
+- **Secrets never in .env:** passwords and keys are stored as separate files (chmod 600) and mounted as Docker secrets (tmpfs-backed, never on the container filesystem).
+- **No auto-publish:** npm releases require a manual `workflow_dispatch` trigger. Template syncs from upstream open a PR but never auto-merge or auto-publish.
 
 ## Contributing
 
