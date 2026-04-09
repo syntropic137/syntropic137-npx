@@ -362,6 +362,7 @@ export function summaryBox(opts: {
   healthy: boolean;
   port: string;
   installDir: string;
+  showCredentials?: boolean;
 }): void {
   const width = 78;
   console.log();
@@ -397,6 +398,20 @@ export function summaryBox(opts: {
   console.log(boxLine(`    Set up a tunnel: ${cyan(`${BIN} tunnel`)}`, width));
   console.log(boxLine(`    Event reference: ${dim("github.com/syntropic137/syntropic137")}`, width));
   console.log(boxLine(`      ${dim("packages/syn-domain/.../github/_shared/event_availability.py")}`, width));
+
+  if (opts.showCredentials) {
+    console.log(boxLine("", width));
+    console.log(boxLine(`  ${bold("Gateway credentials")} ${dim("(saved to " + opts.installDir + "/.env)")}`, width));
+    console.log(boxLine(`    Username: ${cyan("admin")}`, width));
+    console.log(boxLine(`    View password:`, width));
+    console.log(boxLine(`      ${dim("grep SYN_API_PASSWORD " + opts.installDir + "/.env | cut -d= -f2")}`, width));
+    console.log(boxLine(`    Copy to clipboard (macOS):`, width));
+    console.log(boxLine(`      ${dim("grep SYN_API_PASSWORD " + opts.installDir + "/.env | cut -d= -f2 | pbcopy")}`, width));
+    console.log(boxLine(`    syn CLI access:`, width));
+    console.log(boxLine(`      ${dim("export SYN_API_USER=admin")}`, width));
+    console.log(boxLine(`      ${dim("export SYN_API_PASSWORD=$(grep SYN_API_PASSWORD " + opts.installDir + "/.env | cut -d= -f2)")}`, width));
+    console.log(boxLine(`    Rotate: ${cyan(`${BIN} credentials rotate`)}`, width));
+  }
 
   console.log(`  ${dim(BOX.bl + BOX.h.repeat(width + 2) + BOX.br)}`);
   console.log();

@@ -1,6 +1,8 @@
 /** CLI options parsed from argv. */
 export interface CliOptions {
-  command: "init" | "status" | "stop" | "start" | "logs" | "update" | "plugin" | "github-app" | "tunnel" | "cli" | "menu" | "help";
+  command: "init" | "status" | "stop" | "start" | "logs" | "update" | "plugin" | "github-app" | "tunnel" | "cli" | "credentials" | "menu" | "help";
+  /** Sub-action for the `credentials` command. */
+  credentialsAction?: "show" | "rotate";
   org?: string;
   name?: string;
   dir?: string;
@@ -13,6 +15,8 @@ export interface CliOptions {
 export interface EnvValues {
   APP_ENVIRONMENT: string;
   SYN_VERSION: string;
+  SYN_API_USER?: string;
+  SYN_API_PASSWORD?: string;
   ANTHROPIC_API_KEY?: string;
   CLAUDE_CODE_OAUTH_TOKEN?: string;
   SYN_GITHUB_APP_ID?: string;
