@@ -126,23 +126,21 @@ export function prompt(question: string, defaultValue?: string): Promise<string>
 
 export function promptSecret(question: string): Promise<string> {
   return new Promise((resolve) => {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-    // Mute output for secret input
-    process.stdout.write(`  ${cyan("  ?")} ${question}: `);
     const stdin = process.stdin;
     const wasRaw = stdin.isRaw;
+    // Set raw mode BEFORE anything reads from stdin to prevent readline's
+    // echo layer from exposing pasted secrets during the setup window.
     if (stdin.setRawMode) stdin.setRawMode(true);
+    stdin.resume();
+    process.stdout.write(`  ${cyan("  ?")} ${question}: `);
     let value = "";
     const onData = (ch: Buffer) => {
       const c = ch.toString();
       if (c === "\n" || c === "\r") {
         if (stdin.setRawMode) stdin.setRawMode(wasRaw ?? false);
         stdin.removeListener("data", onData);
+        stdin.pause();
         process.stdout.write("\n");
-        rl.close();
         resolve(value);
       } else if (c === "\u0003") {
         // Ctrl+C

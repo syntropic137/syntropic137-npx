@@ -173,7 +173,7 @@ export class InitFlow {
       info("Found ANTHROPIC_API_KEY in environment");
       envValues.ANTHROPIC_API_KEY = existingKey;
     } else {
-      info("An Anthropic API key or Claude Code OAuth token is required.");
+      info("An Anthropic API key is required.");
       info("Get a key at: https://console.anthropic.com/settings/keys");
       const apiKey = await promptSecret("ANTHROPIC_API_KEY");
       if (apiKey) {
@@ -188,6 +188,7 @@ export class InitFlow {
       step("Setting up GitHub App");
       console.log();
       info("This creates a GitHub App so Syntropic137 can interact with your repos.");
+      info("Make sure you are logged in to GitHub before clicking Create.");
       info("A browser window will open — approve the app, then return here.");
       console.log();
 
@@ -800,8 +801,10 @@ const entryArg = process.argv[1] ?? "";
 const isDirectRun =
   entryArg.endsWith("cli.js") || entryArg.endsWith("syntropic137");
 if (isDirectRun) {
-  main().catch((err) => {
-    fail(err instanceof Error ? err.message : String(err));
-    process.exit(1);
-  });
+  main()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      fail(err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    });
 }
