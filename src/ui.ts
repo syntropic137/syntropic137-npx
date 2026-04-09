@@ -1,5 +1,5 @@
 import * as readline from "node:readline";
-import { BIN, COMMANDS } from "./constants.js";
+import { BIN, COMMANDS, DEFAULT_API_USER, ENV_KEYS } from "./constants.js";
 
 // ---------------------------------------------------------------------------
 // ANSI color helpers (no dependencies)
@@ -368,6 +368,8 @@ export function summaryBox(opts: {
   healthy: boolean;
   port: string;
   installDir: string;
+  showCredentials?: boolean;
+  apiUser?: string;
 }): void {
   const width = 78;
   console.log();
@@ -403,6 +405,22 @@ export function summaryBox(opts: {
   console.log(boxLine(`    Set up a tunnel: ${cyan(`${BIN} tunnel`)}`, width));
   console.log(boxLine(`    Event reference: ${dim("github.com/syntropic137/syntropic137")}`, width));
   console.log(boxLine(`      ${dim("packages/syn-domain/.../github/_shared/event_availability.py")}`, width));
+
+  if (opts.showCredentials) {
+    const envPath = `"${opts.installDir}/.env"`;
+    const username = opts.apiUser ?? DEFAULT_API_USER;
+    console.log(boxLine("", width));
+    console.log(boxLine(`  ${bold("Gateway credentials")} ${dim("(saved to " + opts.installDir + "/.env)")}`, width));
+    console.log(boxLine(`    Username: ${cyan(username)}`, width));
+    console.log(boxLine(`    View password:`, width));
+    console.log(boxLine(`      ${dim(`grep ${ENV_KEYS.SYN_API_PASSWORD} ${envPath} | cut -d= -f2`)}`, width));
+    console.log(boxLine(`    Copy to clipboard (macOS):`, width));
+    console.log(boxLine(`      ${dim(`grep ${ENV_KEYS.SYN_API_PASSWORD} ${envPath} | cut -d= -f2 | pbcopy`)}`, width));
+    console.log(boxLine(`    syn CLI access:`, width));
+    console.log(boxLine(`      ${dim(`export ${ENV_KEYS.SYN_API_USER}=${username}`)}`, width));
+    console.log(boxLine(`      ${dim(`export ${ENV_KEYS.SYN_API_PASSWORD}=$(grep ${ENV_KEYS.SYN_API_PASSWORD} ${envPath} | cut -d= -f2)`)}`, width));
+    console.log(boxLine(`    Rotate: ${cyan(`${BIN} credentials rotate`)}`, width));
+  }
 
   console.log(`  ${dim(BOX.bl + BOX.h.repeat(width + 2) + BOX.br)}`);
   console.log();

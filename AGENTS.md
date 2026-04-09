@@ -16,7 +16,7 @@ Zero-dependency CLI (`@syntropic137/setup`) for one-command Syntropic137 self-ho
 
 ## Markdown style
 
-Never use dashes as separators in markdown files. This means no hyphens (` - `), no en dashes, and no em dashes (`—`). Use colons, commas, or natural word structure instead.
+Never use dashes as inline punctuation within sentences or as label separators. This means no hyphen-as-dash (` - `), no en dashes, and no em dashes. Use colons, commas, or natural word structure instead. Note: standard list bullet markers (`-`) are fine.
 
 - **Labels and descriptions:** use a colon. Example: `**Step name:** description of what it does`
 - **Sentence continuations:** use a comma or reword with "so", "and", "then", or "because"

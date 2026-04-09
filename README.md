@@ -18,10 +18,12 @@ The `init` command walks you through a 12-step interactive setup:
 4. **Generate secrets:** creates cryptographically random passwords for Postgres, Redis, and MinIO (chmod 600)
 5. **Configure LLM provider:** prompts for your Anthropic API key (or picks up `ANTHROPIC_API_KEY` from your environment)
 6. **GitHub App setup:** runs the [GitHub App Manifest flow](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest) to create a GitHub App with the right permissions in one click (optional, skippable)
-7. **Write .env:** renders the final configuration from your answers
-8. **Pull images:** `docker compose pull` from GHCR
-9. **Start services:** `docker compose up -d`
-10. **Health check:** polls `http://localhost:8137/health` until the stack is ready
+7. **Claude Code plugin:** installs the Syntropic137 plugin for Claude Code (optional, skippable)
+8. **Syntropic137 CLI:** installs the `syn` CLI for managing workflows and executions (optional, skippable)
+9. **Write .env:** renders the final configuration from your answers
+10. **Pull images:** `docker compose pull` from GHCR
+11. **Start services:** `docker compose up -d`
+12. **Health check:** polls `http://localhost:8137/health` until the stack is ready
 
 When it's done, you have a running Syntropic137 instance at `http://localhost:8137`.
 
