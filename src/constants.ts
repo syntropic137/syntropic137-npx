@@ -15,6 +15,29 @@ export const COMPOSE_FILE = "docker-compose.syntropic137.yaml";
 export const DEFAULT_APP_NAME = "syntropic137";
 export const DEFAULT_PORT = "8137";
 export const DEFAULT_APP_ENVIRONMENT = "selfhost";
+export const DEFAULT_API_USER = "admin";
+
+// ---------------------------------------------------------------------------
+// Environment variable keys (single source of truth — no magic strings)
+// ---------------------------------------------------------------------------
+
+export const ENV_KEYS = {
+  SYN_API_PASSWORD: "SYN_API_PASSWORD",
+  SYN_API_USER: "SYN_API_USER",
+  SYN_GATEWAY_PORT: "SYN_GATEWAY_PORT",
+  SYN_VERSION: "SYN_VERSION",
+  APP_ENVIRONMENT: "APP_ENVIRONMENT",
+  ANTHROPIC_API_KEY: "ANTHROPIC_API_KEY",
+  CLAUDE_CODE_OAUTH_TOKEN: "CLAUDE_CODE_OAUTH_TOKEN",
+  SYN_GITHUB_APP_ID: "SYN_GITHUB_APP_ID",
+  SYN_GITHUB_APP_NAME: "SYN_GITHUB_APP_NAME",
+  SYN_GITHUB_APP_ORG: "SYN_GITHUB_APP_ORG",
+  SYN_GITHUB_WEBHOOK_SECRET: "SYN_GITHUB_WEBHOOK_SECRET",
+  COMPOSE_PROFILES: "COMPOSE_PROFILES",
+  CLOUDFLARE_TUNNEL_TOKEN: "CLOUDFLARE_TUNNEL_TOKEN",
+  SYN_PUBLIC_HOSTNAME: "SYN_PUBLIC_HOSTNAME",
+  MINIO_ROOT_USER: "MINIO_ROOT_USER",
+} as const;
 
 // ---------------------------------------------------------------------------
 // CLI command reference (single source of truth for all user-facing commands)
@@ -34,16 +57,17 @@ export interface CommandDef {
  * all derive from this single list.
  */
 export const COMMANDS: readonly CommandDef[] = [
-  { name: "init",   description: "Bootstrap a Syntropic137 stack", args: "[options]" },
-  { name: "status", description: "Show container health" },
-  { name: "start",  description: "Start the stack" },
-  { name: "stop",   description: "Stop the stack" },
-  { name: "logs",   description: "Tail container logs" },
-  { name: "update", description: "Pull latest images and restart" },
-  { name: "cli",    description: "Install or update the Syntropic137 CLI" },
-  { name: "plugin", description: "Install or update the Claude Code plugin" },
-  { name: "github-app", description: "Open GitHub App settings in your browser" },
-  { name: "tunnel", description: "Set up remote access (Cloudflare tunnel)" },
+  { name: "init",        description: "Bootstrap a Syntropic137 stack", args: "[options]" },
+  { name: "status",      description: "Show container health" },
+  { name: "start",       description: "Start the stack" },
+  { name: "stop",        description: "Stop the stack" },
+  { name: "logs",        description: "Tail container logs" },
+  { name: "update",      description: "Pull latest images and restart" },
+  { name: "cli",         description: "Install or update the Syntropic137 CLI" },
+  { name: "plugin",      description: "Install or update the Claude Code plugin" },
+  { name: "github-app",  description: "Open GitHub App settings in your browser" },
+  { name: "tunnel",      description: "Set up remote access (Cloudflare tunnel)" },
+  { name: "credentials", description: "View or rotate gateway credentials", args: "[show|rotate]" },
 ] as const;
 
 /** Shorthand lookup: CMD.init → "npx @syntropic137/setup init" */

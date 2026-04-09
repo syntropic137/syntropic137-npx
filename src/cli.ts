@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { execFileSync } from "node:child_process";
@@ -32,8 +33,10 @@ import {
   DEFAULT_APP_NAME,
   DEFAULT_PORT,
   DEFAULT_APP_ENVIRONMENT,
+  DEFAULT_API_USER,
   COMPOSE_FILE,
   TEMPLATE_FILES,
+  ENV_KEYS,
   CMD,
   BIN,
   COMMANDS,
@@ -155,12 +158,17 @@ export class InitFlow {
     // ── Step 4: Generate secrets ────────────────────────────────────────
     step("Generating secrets");
     this.secrets.generate(reconfigure);
+    // Generate gateway auth password — required for all deployments.
+    // Do not wrap in try/catch: if crypto fails, propagate immediately.
+    const apiPassword = crypto.randomBytes(32).toString("hex");
 
     // ── Step 5: Prompt for API key ──────────────────────────────────────
     step("Configuring LLM provider");
     const envValues: EnvValues = {
-      APP_ENVIRONMENT: DEFAULT_APP_ENVIRONMENT,
-      SYN_VERSION: PLATFORM_VERSION,
+      [ENV_KEYS.APP_ENVIRONMENT]: DEFAULT_APP_ENVIRONMENT,
+      [ENV_KEYS.SYN_VERSION]: PLATFORM_VERSION,
+      [ENV_KEYS.SYN_API_USER]: DEFAULT_API_USER,
+      [ENV_KEYS.SYN_API_PASSWORD]: apiPassword,
     };
 
     const existingKey = process.env.ANTHROPIC_API_KEY || "";
@@ -168,16 +176,16 @@ export class InitFlow {
 
     if (existingOauth) {
       info("Found CLAUDE_CODE_OAUTH_TOKEN in environment");
-      envValues.CLAUDE_CODE_OAUTH_TOKEN = existingOauth;
+      envValues[ENV_KEYS.CLAUDE_CODE_OAUTH_TOKEN] = existingOauth;
     } else if (existingKey) {
       info("Found ANTHROPIC_API_KEY in environment");
-      envValues.ANTHROPIC_API_KEY = existingKey;
+      envValues[ENV_KEYS.ANTHROPIC_API_KEY] = existingKey;
     } else {
       info("An Anthropic API key or Claude Code OAuth token is required.");
       info("Get a key at: https://console.anthropic.com/settings/keys");
-      const apiKey = await promptSecret("ANTHROPIC_API_KEY");
+      const apiKey = await promptSecret(ENV_KEYS.ANTHROPIC_API_KEY);
       if (apiKey) {
-        envValues.ANTHROPIC_API_KEY = apiKey;
+        envValues[ENV_KEYS.ANTHROPIC_API_KEY] = apiKey;
       } else {
         warn("No API key provided. You can add it to .env later.");
       }
@@ -211,13 +219,13 @@ export class InitFlow {
           });
           const result = await setup.run();
 
-          envValues.SYN_GITHUB_APP_ID = String(result.id);
-          envValues.SYN_GITHUB_APP_NAME = result.slug;
+          envValues[ENV_KEYS.SYN_GITHUB_APP_ID] = String(result.id);
+          envValues[ENV_KEYS.SYN_GITHUB_APP_NAME] = result.slug;
           if (org) {
-            envValues.SYN_GITHUB_APP_ORG = org;
+            envValues[ENV_KEYS.SYN_GITHUB_APP_ORG] = org;
           }
           if (result.webhook_secret) {
-            envValues.SYN_GITHUB_WEBHOOK_SECRET = result.webhook_secret;
+            envValues[ENV_KEYS.SYN_GITHUB_WEBHOOK_SECRET] = result.webhook_secret;
           }
         } catch (err) {
           fail("GitHub App creation failed.");
@@ -258,11 +266,11 @@ export class InitFlow {
     docker.up();
 
     step("Health check");
-    const port = envValues.SYN_GATEWAY_PORT || DEFAULT_PORT;
+    const port = envValues[ENV_KEYS.SYN_GATEWAY_PORT] || DEFAULT_PORT;
     const healthy = await docker.waitForHealth(port);
 
     // ── Summary ─────────────────────────────────────────────────────────
-    summaryBox({ healthy, port, installDir: this.installDir });
+    summaryBox({ healthy, port, installDir: this.installDir, showCredentials: true });
   }
 
   // ── Private ───────────────────────────────────────────────────────────
@@ -465,6 +473,10 @@ export class CLI {
       case "cli":
         CLI.cliSync();
         break;
+
+      case "credentials":
+        await this.credentials(dir, this.opts.credentialsAction);
+        break;
     }
   }
 
@@ -519,11 +531,11 @@ export class CLI {
     const installDir = this.resolveDir(dir);
     const config = new ConfigManager(installDir);
     const env = config.readEnv();
-    const slug = env.SYN_GITHUB_APP_NAME;
+    const slug = env[ENV_KEYS.SYN_GITHUB_APP_NAME];
 
     if (!slug) {
       fail("No GitHub App configured.");
-      info(`Run \`${CMD.init}\` to create one, or set SYN_GITHUB_APP_NAME in .env.`);
+      info(`Run \`${CMD.init}\` to create one, or set ${ENV_KEYS.SYN_GITHUB_APP_NAME} in .env.`);
       process.exit(1);
     }
 
@@ -532,7 +544,7 @@ export class CLI {
       process.exit(1);
     }
 
-    const org = this.opts.org || env.SYN_GITHUB_APP_ORG;
+    const org = this.opts.org || env[ENV_KEYS.SYN_GITHUB_APP_ORG];
     if (org && !GITHUB_SLUG_RE.test(org)) {
       fail(`Invalid GitHub org name: ${org}`);
       process.exit(1);
@@ -561,6 +573,15 @@ export class CLI {
   private async tunnel(dir: string): Promise<void> {
     const installDir = this.resolveDir(dir);
     const config = new ConfigManager(installDir);
+
+    // ── Security gate: require gateway password before internet exposure ─
+    const existingEnv = config.readEnv();
+    const existingPassword = existingEnv[ENV_KEYS.SYN_API_PASSWORD];
+    if (!existingPassword || existingPassword.trim() === "") {
+      fail(`${ENV_KEYS.SYN_API_PASSWORD} is not set — the tunnel would expose your API without authentication.`);
+      info(`Run: ${CMD["credentials"]} rotate to generate credentials first.`);
+      process.exit(1);
+    }
 
     console.log();
     info(bold("Remote Access Setup"));
@@ -607,7 +628,8 @@ export class CLI {
     info("  3. A tunnel created via the Cloudflare dashboard or CLI");
     console.log();
     info("Create a tunnel: https://one.dash.cloudflare.com → Networks → Tunnels");
-    info("Point it to: http://syn-gateway:8137 (internal Docker service)");
+    info(`Point it to: ${cyan("http://gateway:8081")}  ${dim("(auth-guarded nginx port — reachable from cloudflared on the Docker network)")}`);
+    info(`${dim("  Do NOT use port 80 or 8137 — those are unauthenticated.")}`);
     console.log();
 
     const token = await promptSecret("Cloudflare Tunnel token");
@@ -624,11 +646,11 @@ export class CLI {
 
     // Read existing .env values, merge tunnel config, and rewrite
     const env = config.readEnv();
-    const existingProfiles = (env.COMPOSE_PROFILES ?? "").split(",").map(s => s.trim()).filter(Boolean);
+    const existingProfiles = (env[ENV_KEYS.COMPOSE_PROFILES] ?? "").split(",").map(s => s.trim()).filter(Boolean);
     if (!existingProfiles.includes("tunnel")) existingProfiles.push("tunnel");
-    env.COMPOSE_PROFILES = existingProfiles.join(",");
-    env.CLOUDFLARE_TUNNEL_TOKEN = token;
-    env.SYN_PUBLIC_HOSTNAME = hostname;
+    env[ENV_KEYS.COMPOSE_PROFILES] = existingProfiles.join(",");
+    env[ENV_KEYS.CLOUDFLARE_TUNNEL_TOKEN] = token;
+    env[ENV_KEYS.SYN_PUBLIC_HOSTNAME] = hostname;
     config.writeEnv(env as EnvValues, TEMPLATES_DIR);
 
     console.log();
@@ -659,6 +681,101 @@ export class CLI {
     info(`  1. Verify the tunnel: open ${cyan(`https://${hostname}`)}`);
     info(`  2. Update your GitHub App webhook URL to ${cyan(`https://${hostname}/api/v1/github/webhooks`)}`);
     info(`  3. Run ${cyan(CMD["github-app"])} to open GitHub App settings`);
+  }
+
+  // ── Credentials management ───────────────────────────────────────────
+
+  private async credentials(dir: string, action?: "show" | "rotate"): Promise<void> {
+    const installDir = this.resolveDir(dir);
+
+    // If no action provided, show a sub-menu
+    if (!action) {
+      const items: MenuItem[] = [
+        { label: "show",   value: "show",   description: "View access instructions and copy commands" },
+        { label: "rotate", value: "rotate", description: "Regenerate all secrets and restart the stack" },
+      ];
+      action = (await interactiveMenu(items, "What would you like to do?")) as "show" | "rotate";
+      console.log();
+    }
+
+    if (action === "show") {
+      this.credentialsShow(installDir);
+      return;
+    }
+
+    // ── rotate ──────────────────────────────────────────────────────────
+    console.log();
+    info(bold("Credential Rotation"));
+    console.log();
+    info("This will regenerate all secrets and restart the stack.");
+    info("Active browser sessions and CLI sessions will need to re-authenticate.");
+    console.log();
+
+    const proceed = await confirm("Rotate credentials now?", false);
+    if (!proceed) {
+      info("Cancelled.");
+      return;
+    }
+
+    const secrets = new SecretsManager(path.join(installDir, "secrets"));
+    const config = new ConfigManager(installDir);
+
+    // Step 1: Rotate infra secrets (db, redis, minio) — backs up old to .bak
+    info("Rotating infrastructure secrets...");
+    secrets.generate(true);
+
+    // Step 2: Generate new gateway auth password
+    // Do not wrap: if crypto fails, propagate immediately.
+    const newPassword = crypto.randomBytes(32).toString("hex");
+
+    // Step 3: Update .env with the new password
+    const env = config.readEnv();
+    env[ENV_KEYS.SYN_API_PASSWORD] = newPassword;
+    env[ENV_KEYS.SYN_API_USER] = env[ENV_KEYS.SYN_API_USER] || DEFAULT_API_USER;
+    config.writeEnv(env as EnvValues, TEMPLATES_DIR);
+
+    // Step 4: Restart stack — explicit stop then start (not `up -d`) to ensure
+    // all containers reload with new secrets. Between writeEnv and docker.start(),
+    // the running stack still accepts the old password (nginx htpasswd loaded at
+    // startup). The window closes when docker.start() completes.
+    info("Restarting the stack with new credentials...");
+    const docker = new DockerService(installDir);
+    docker.stop();
+    docker.start();
+
+    success("Credentials rotated successfully");
+    console.log();
+    info(`${dim("Note: previous secrets backed up to")} ${dim(path.join(installDir, "secrets") + "/*.bak")} ${dim("— delete if no longer needed.")}`);
+    console.log();
+    this.credentialsShow(installDir);
+  }
+
+  /** Print gateway credential retrieval instructions (never prints the password). */
+  private credentialsShow(installDir: string): void {
+    const envPath = path.join(installDir, ".env");
+    const quotedEnvPath = `"${envPath}"`;
+    const config = new ConfigManager(installDir);
+    const existingEnv = config.readEnv();
+    const username = existingEnv[ENV_KEYS.SYN_API_USER] || DEFAULT_API_USER;
+    console.log();
+    info(bold("Gateway credentials"));
+    console.log();
+    info(`  Saved to: ${dim(envPath)}`);
+    console.log();
+    info(`  Username: ${cyan(username)}`);
+    console.log();
+    info(`  View password:`);
+    info(`    ${dim(`grep ${ENV_KEYS.SYN_API_PASSWORD} ${quotedEnvPath} | cut -d= -f2`)}`);
+    console.log();
+    info(`  Copy to clipboard (macOS):`);
+    info(`    ${dim(`grep ${ENV_KEYS.SYN_API_PASSWORD} ${quotedEnvPath} | cut -d= -f2 | pbcopy`)}`);
+    console.log();
+    info(`  ${bold("syn")} CLI access:`);
+    info(`    ${dim(`export ${ENV_KEYS.SYN_API_USER}=${username}`)}`);
+    info(`    ${dim(`export ${ENV_KEYS.SYN_API_PASSWORD}=$(grep ${ENV_KEYS.SYN_API_PASSWORD} ${quotedEnvPath} | cut -d= -f2)`)}`);
+    console.log();
+    info(`  Rotate: ${cyan(`${BIN} credentials rotate`)}`);
+    console.log();
   }
 
   // ── Interactive menu ──────────────────────────────────────────────────
@@ -696,7 +813,7 @@ export class CLI {
       process.exit(0);
     }
 
-    const subcommands = ["init", "status", "stop", "start", "logs", "update", "plugin", "github-app", "tunnel", "cli", "help"] as const;
+    const subcommands = ["init", "status", "stop", "start", "logs", "update", "plugin", "github-app", "tunnel", "cli", "credentials", "help"] as const;
     type Subcommand = (typeof subcommands)[number];
     const firstArg = args[0];
     let command: CliOptions["command"] = "menu";
@@ -710,6 +827,15 @@ export class CLI {
     }
 
     const opts: CliOptions = { command };
+
+    // Parse sub-action for `credentials` command
+    if (command === "credentials" && args[1]) {
+      const secondArg = args[1];
+      if (secondArg === "show" || secondArg === "rotate") {
+        opts.credentialsAction = secondArg;
+      }
+    }
+
     for (let i = 0; i < args.length; i++) {
       const arg = args[i]!;
       switch (arg) {
