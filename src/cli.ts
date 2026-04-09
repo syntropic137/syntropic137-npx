@@ -579,7 +579,7 @@ export class CLI {
     const existingPassword = existingEnv[ENV_KEYS.SYN_API_PASSWORD];
     if (!existingPassword || existingPassword.trim() === "") {
       fail(`${ENV_KEYS.SYN_API_PASSWORD} is not set — the tunnel would expose your API without authentication.`);
-      info(`Run: ${CMD["credentials"]} rotate  to generate credentials first.`);
+      info(`Run: ${CMD["credentials"]} rotate to generate credentials first.`);
       process.exit(1);
     }
 
@@ -628,7 +628,7 @@ export class CLI {
     info("  3. A tunnel created via the Cloudflare dashboard or CLI");
     console.log();
     info("Create a tunnel: https://one.dash.cloudflare.com → Networks → Tunnels");
-    info(`Point it to: ${cyan("http://gateway:8081")}  ${dim("(auth-guarded nginx — required for security)")}`);
+    info(`Point it to: ${cyan("http://gateway:8081")}  ${dim("(auth-guarded nginx port — reachable from cloudflared on the Docker network)")}`);
     info(`${dim("  Do NOT use port 80 or 8137 — those are unauthenticated.")}`);
     console.log();
 
@@ -753,22 +753,26 @@ export class CLI {
   /** Print gateway credential retrieval instructions (never prints the password). */
   private credentialsShow(installDir: string): void {
     const envPath = path.join(installDir, ".env");
+    const quotedEnvPath = `"${envPath}"`;
+    const config = new ConfigManager(installDir);
+    const existingEnv = config.readEnv();
+    const username = existingEnv[ENV_KEYS.SYN_API_USER] || DEFAULT_API_USER;
     console.log();
     info(bold("Gateway credentials"));
     console.log();
     info(`  Saved to: ${dim(envPath)}`);
     console.log();
-    info(`  Username: ${cyan(DEFAULT_API_USER)}`);
+    info(`  Username: ${cyan(username)}`);
     console.log();
     info(`  View password:`);
-    info(`    ${dim(`grep ${ENV_KEYS.SYN_API_PASSWORD} ${envPath} | cut -d= -f2`)}`);
+    info(`    ${dim(`grep ${ENV_KEYS.SYN_API_PASSWORD} ${quotedEnvPath} | cut -d= -f2`)}`);
     console.log();
     info(`  Copy to clipboard (macOS):`);
-    info(`    ${dim(`grep ${ENV_KEYS.SYN_API_PASSWORD} ${envPath} | cut -d= -f2 | pbcopy`)}`);
+    info(`    ${dim(`grep ${ENV_KEYS.SYN_API_PASSWORD} ${quotedEnvPath} | cut -d= -f2 | pbcopy`)}`);
     console.log();
     info(`  ${bold("syn")} CLI access:`);
-    info(`    ${dim(`export ${ENV_KEYS.SYN_API_USER}=${DEFAULT_API_USER}`)}`);
-    info(`    ${dim(`export ${ENV_KEYS.SYN_API_PASSWORD}=$(grep ${ENV_KEYS.SYN_API_PASSWORD} ${envPath} | cut -d= -f2)`)}`);
+    info(`    ${dim(`export ${ENV_KEYS.SYN_API_USER}=${username}`)}`);
+    info(`    ${dim(`export ${ENV_KEYS.SYN_API_PASSWORD}=$(grep ${ENV_KEYS.SYN_API_PASSWORD} ${quotedEnvPath} | cut -d= -f2)`)}`);
     console.log();
     info(`  Rotate: ${cyan(`${BIN} credentials rotate`)}`);
     console.log();
