@@ -70,7 +70,7 @@ export class InitFlow {
   private readonly secrets: SecretsManager;
 
   constructor(private readonly opts: CliOptions) {
-    this.installDir = opts.dir || DEFAULT_INSTALL_DIR;
+    this.installDir = path.resolve(opts.dir || DEFAULT_INSTALL_DIR);
     this.secretsDir = path.join(this.installDir, "secrets");
     this.appName = opts.name || DEFAULT_APP_NAME;
     this.config = new ConfigManager(this.installDir);
@@ -167,6 +167,7 @@ export class InitFlow {
     const envValues: EnvValues = {
       [ENV_KEYS.APP_ENVIRONMENT]: DEFAULT_APP_ENVIRONMENT,
       [ENV_KEYS.SYN_VERSION]: PLATFORM_VERSION,
+      [ENV_KEYS.SYN_INSTALL_DIR]: this.installDir,
       [ENV_KEYS.SYN_API_USER]: DEFAULT_API_USER,
       [ENV_KEYS.SYN_API_PASSWORD]: apiPassword,
     };
@@ -687,16 +688,16 @@ export class CLI {
 
   // ── Credentials management ───────────────────────────────────────────
 
-  private async credentials(dir: string, action?: "show" | "rotate"): Promise<void> {
+  private async credentials(dir: string, action?: "show" | "rotate" | "rollback"): Promise<void> {
     const installDir = this.resolveDir(dir);
 
     // If no action provided, show a sub-menu
     if (!action) {
       const items: MenuItem[] = [
-        { label: "show",   value: "show",   description: "View access instructions and copy commands" },
-        { label: "rotate", value: "rotate", description: "Regenerate all secrets and restart the stack" },
+        { label: "show",     value: "show",     description: "View access instructions and copy commands" },
+        { label: "rollback", value: "rollback", description: "Restore credentials from the last backup" },
       ];
-      action = (await interactiveMenu(items, "What would you like to do?")) as "show" | "rotate";
+      action = (await interactiveMenu(items, "What would you like to do?")) as "show" | "rollback";
       console.log();
     }
 
@@ -705,49 +706,62 @@ export class CLI {
       return;
     }
 
-    // ── rotate ──────────────────────────────────────────────────────────
+    if (action === "rollback") {
+      await this.credentialsRollback(installDir);
+      return;
+    }
+
+    // ── rotate: temporarily disabled (phase 2 tracked in issue #56) ─────
+    // Rotation updates .env and secret files but the event store password is
+    // baked in at container init time — after a stack restart the event store
+    // can no longer authenticate to the database, breaking the system with no
+    // safe recovery path. Re-enable once service-aware two-phase rotation is
+    // implemented. See: https://github.com/syntropic137/syntropic137-npx/issues/56
     console.log();
-    info(bold("Credential Rotation"));
+    warn("Credential rotation is temporarily disabled.");
+    info("Track progress: https://github.com/syntropic137/syntropic137-npx/issues/56");
     console.log();
-    info("This will regenerate all secrets and restart the stack.");
-    info("Active browser sessions and CLI sessions will need to re-authenticate.");
+  }
+
+  /**
+   * Restore credentials from the last pre-rotation backup.
+   *
+   * The backup is written to .env.backup before any rotation step, so this
+   * command returns the stack to its last known-good credential state.
+   */
+  private async credentialsRollback(installDir: string): Promise<void> {
+    const backupPath = path.join(installDir, ".env.backup");
+
+    if (!fs.existsSync(backupPath)) {
+      fail("No credential backup found.");
+      info(`Expected: ${backupPath}`);
+      info("A backup is created automatically before each rotation. If none exists,");
+      info("credentials have not been rotated via this tool.");
+      return;
+    }
+
+    console.log();
+    info(bold("Credential Rollback"));
+    console.log();
+    info(`Backup: ${dim(backupPath)}`);
+    info("This will restore the previous .env and restart the stack.");
     console.log();
 
-    const proceed = await confirm("Rotate credentials now?", false);
+    const proceed = await confirm("Restore previous credentials?", false);
     if (!proceed) {
       info("Cancelled.");
       return;
     }
 
-    const secrets = new SecretsManager(path.join(installDir, "secrets"));
-    const config = new ConfigManager(installDir);
+    fs.copyFileSync(backupPath, path.join(installDir, ".env"));
+    fs.chmodSync(path.join(installDir, ".env"), 0o600);
 
-    // Step 1: Rotate infra secrets (db, redis, minio) — backs up old to .bak
-    info("Rotating infrastructure secrets...");
-    secrets.generate(true);
-
-    // Step 2: Generate new gateway auth password
-    // Do not wrap: if crypto fails, propagate immediately.
-    const newPassword = crypto.randomBytes(32).toString("hex");
-
-    // Step 3: Update .env with the new password
-    const env = config.readEnv();
-    env[ENV_KEYS.SYN_API_PASSWORD] = newPassword;
-    env[ENV_KEYS.SYN_API_USER] = env[ENV_KEYS.SYN_API_USER] || DEFAULT_API_USER;
-    config.writeEnv(env as EnvValues, TEMPLATES_DIR);
-
-    // Step 4: Restart stack — explicit stop then start (not `up -d`) to ensure
-    // all containers reload with new secrets. Between writeEnv and docker.start(),
-    // the running stack still accepts the old password (nginx htpasswd loaded at
-    // startup). The window closes when docker.start() completes.
-    info("Restarting the stack with new credentials...");
+    info("Restarting the stack with restored credentials...");
     const docker = new DockerService(installDir);
     docker.stop();
     docker.start();
 
-    success("Credentials rotated successfully");
-    console.log();
-    info(`${dim("Note: previous secrets backed up to")} ${dim(path.join(installDir, "secrets") + "/*.bak")} ${dim("— delete if no longer needed.")}`);
+    success("Credentials restored from backup");
     console.log();
     this.credentialsShow(installDir);
   }
@@ -776,7 +790,7 @@ export class CLI {
     info(`    ${dim(`export ${ENV_KEYS.SYN_API_USER}=${username}`)}`);
     info(`    ${dim(`export ${ENV_KEYS.SYN_API_PASSWORD}=$(grep ${ENV_KEYS.SYN_API_PASSWORD} ${quotedEnvPath} | cut -d= -f2)`)}`);
     console.log();
-    info(`  Rotate: ${cyan(`${BIN} credentials rotate`)}`);
+    info(`  Roll back a rotation: ${cyan(`${BIN} credentials rollback`)}`);
     console.log();
   }
 
@@ -787,11 +801,28 @@ export class CLI {
     // Flair target = subtitle line in banner. From the save point (after title+blank),
     // count up: blank(1) + title(1) + blank-after-banner(1) + bottom-border(1) + url(1) + subtitle(1) = 6
     const flairLinesAboveSave = 6;
-    const menuItems: MenuItem[] = COMMANDS.map((c) => ({
-      label: c.name,
-      value: c.name,
-      description: c.description,
-    }));
+
+    const installDir = path.resolve(this.opts.dir || DEFAULT_INSTALL_DIR);
+    const initDone = fs.existsSync(installDir);
+
+    // Commands that require a completed init (install dir must exist)
+    const requiresInit = new Set([
+      "status", "stop", "start", "logs", "update",
+      "credentials", "tunnel", "github-app",
+    ]);
+
+    const menuItems: MenuItem[] = COMMANDS.map((c) => {
+      const needsInit = requiresInit.has(c.name);
+      const disabled = needsInit && !initDone;
+      return {
+        label: c.name,
+        value: c.name,
+        description: c.description,
+        disabled,
+        disabledReason: disabled ? `run ${CMD.init} first` : undefined,
+      };
+    });
+
     const choice = await interactiveMenu(
       menuItems,
       "What would you like to do?",
@@ -833,7 +864,7 @@ export class CLI {
     // Parse sub-action for `credentials` command
     if (command === "credentials" && args[1]) {
       const secondArg = args[1];
-      if (secondArg === "show" || secondArg === "rotate") {
+      if (secondArg === "show" || secondArg === "rotate" || secondArg === "rollback") {
         opts.credentialsAction = secondArg;
       }
     }

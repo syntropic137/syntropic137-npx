@@ -165,6 +165,26 @@ describe("runInit --skip-docker --skip-github", () => {
     const content = fs.readFileSync(path.join(tmpDir, ".env"), "utf-8");
     expect(content).toContain("APP_ENVIRONMENT=selfhost");
   });
+
+  it(".env contains SYN_INSTALL_DIR as an absolute path matching the install dir", async () => {
+    await runInit({ command: "init", dir: tmpDir, skipDocker: true, skipGithub: true });
+
+    const content = fs.readFileSync(path.join(tmpDir, ".env"), "utf-8");
+    const match = content.match(/^SYN_INSTALL_DIR=(.+)$/m);
+    expect(match).not.toBeNull();
+    expect(match![1]).toBe(path.resolve(tmpDir));
+    expect(path.isAbsolute(match![1]!)).toBe(true);
+  });
+
+  it("resolves a relative --dir to an absolute path in .env", async () => {
+    const relativeDir = path.relative(process.cwd(), tmpDir);
+    await runInit({ command: "init", dir: relativeDir, skipDocker: true, skipGithub: true });
+
+    const content = fs.readFileSync(path.join(tmpDir, ".env"), "utf-8");
+    const match = content.match(/^SYN_INSTALL_DIR=(.+)$/m);
+    expect(match).not.toBeNull();
+    expect(path.isAbsolute(match![1]!)).toBe(true);
+  });
 });
 
 describe("runInit with mocked GitHub flow", () => {

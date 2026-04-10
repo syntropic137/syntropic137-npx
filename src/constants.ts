@@ -26,6 +26,7 @@ export const ENV_KEYS = {
   SYN_API_USER: "SYN_API_USER",
   SYN_GATEWAY_PORT: "SYN_GATEWAY_PORT",
   SYN_VERSION: "SYN_VERSION",
+  SYN_INSTALL_DIR: "SYN_INSTALL_DIR",
   APP_ENVIRONMENT: "APP_ENVIRONMENT",
   ANTHROPIC_API_KEY: "ANTHROPIC_API_KEY",
   CLAUDE_CODE_OAUTH_TOKEN: "CLAUDE_CODE_OAUTH_TOKEN",
@@ -67,7 +68,7 @@ export const COMMANDS: readonly CommandDef[] = [
   { name: "plugin",      description: "Install or update the Claude Code plugin" },
   { name: "github-app",  description: "Open GitHub App settings in your browser" },
   { name: "tunnel",      description: "Set up remote access (Cloudflare tunnel)" },
-  { name: "credentials", description: "View or rotate gateway credentials", args: "[show|rotate]" },
+  { name: "credentials", description: "View gateway credentials or roll back a rotation", args: "[show|rollback]" },
 ] as const;
 
 /** Shorthand lookup: CMD.init → "npx @syntropic137/setup init" */
