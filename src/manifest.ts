@@ -23,6 +23,8 @@ const DEFAULT_PERMISSIONS: AppPermissions = {
 };
 
 const DEFAULT_EVENTS: string[] = [
+  "installation",
+  "installation_repositories",
   "workflow_run",
   "workflow_job",
   "check_run",

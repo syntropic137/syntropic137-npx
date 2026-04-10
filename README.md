@@ -66,7 +66,7 @@ When you don't pass `--skip-github`, the CLI creates a GitHub App automatically.
 6. Credentials are saved to `~/.syntropic137/secrets/` with chmod 600
 7. Your browser opens the app's installation page so you can choose which repos to grant access
 
-The private key (PEM) is mounted into containers as a Docker secret (tmpfs-backed, never written to the container filesystem). Installation IDs are resolved dynamically at runtime, so the app can be installed across multiple orgs and repos.
+The private key (PEM) is mounted into containers as a Docker secret (tmpfs-backed, never written to the container filesystem). Installation IDs are resolved dynamically at runtime, so the app can be installed across multiple orgs and repos. Repositories granted to the installation are discovered automatically at startup and refreshed every hour without requiring a webhook URL.
 
 ## What gets installed
 
