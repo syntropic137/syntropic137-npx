@@ -42,6 +42,8 @@ describe("buildManifest", () => {
     expect(events).toContain("pull_request");
     expect(events).toContain("push");
     expect(events).toContain("issues");
+    expect(events).toContain("installation");
+    expect(events).toContain("installation_repositories");
 
     const hook = manifest.hook_attributes as Record<string, unknown>;
     expect(hook.url).toBe("https://example.com/webhook");
