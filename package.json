@@ -1,6 +1,6 @@
 {
   "name": "@syntropic137/setup",
-  "version": "0.24.0",
+  "version": "0.24.2",
   "type": "module",
   "description": "Zero-dependency self-host setup CLI for Syntropic137",
   "bin": {
@@ -40,7 +40,7 @@
     "url": "git+https://github.com/syntropic137/syntropic137-npx.git"
   },
   "syntropic137": {
-    "platformVersion": "0.24.0"
+    "platformVersion": "0.24.2"
   },
   "license": "MIT",
   "devDependencies": {
