@@ -803,7 +803,7 @@ export class CLI {
     const flairLinesAboveSave = 6;
 
     const installDir = path.resolve(this.opts.dir || DEFAULT_INSTALL_DIR);
-    const initDone = fs.existsSync(installDir);
+    const initDone = new ConfigManager(installDir).exists();
 
     // Commands that require a completed init (install dir must exist)
     const requiresInit = new Set([

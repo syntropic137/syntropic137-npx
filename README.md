@@ -79,7 +79,7 @@ Everything lives in `~/.syntropic137/`:
 ├── selfhost-entrypoint.sh             # Secret injection at container startup
 ├── selfhost.env.example               # Reference template
 ├── .env                               # Your configuration (chmod 600)
-├── .env.backup                        # Pre-rotation backup, created by credentials rollback
+├── .env.backup                        # Pre-rotation backup, consumed by credentials rollback (written by rotation once re-enabled)
 ├── init-db/
 │   └── 01-create-databases.sql        # Database schema
 ├── secrets/

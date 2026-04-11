@@ -215,7 +215,7 @@ export function interactiveMenu(
     let flairIdx = 0;
     let hasDrawn = false;
 
-    // Lines used by the inline error message (null when none shown)
+    // Lines used by the inline error message (0 when none shown)
     let errorLines = 0;
 
     function renderItems(errorMsg?: string) {
@@ -253,8 +253,10 @@ export function interactiveMenu(
       if (!flair || !isTTY) return;
       flairIdx++;
       const ch = FLAIR_FRAMES[flairIdx % FLAIR_FRAMES.length]!;
-      // Move up from current position to the flair line, update char, move back
-      const linesUp = items.length + flair.linesAboveSave;
+      // Move up from current position to the flair line, update char, move back.
+      // Include errorLines so the flair targets the correct line when an inline
+      // error banner is visible below the menu.
+      const linesUp = items.length + errorLines + flair.linesAboveSave;
       out.write(
         `\x1b[${linesUp}F` +      // move up N lines (to start of line)
         `\x1b[${flair.col}G` +    // move to column
@@ -268,6 +270,20 @@ export function interactiveMenu(
       out.write(`  ${bold(title)}\n\n`);
     }
 
+    // Start cursor on first enabled item before the initial render so the
+    // pointer appears correctly on the first draw.
+    function nextEnabled(from: number, dir: 1 | -1): number {
+      let i = (from + dir + items.length) % items.length;
+      let attempts = 0;
+      while (items[i]!.disabled && attempts < items.length) {
+        i = (i + dir + items.length) % items.length;
+        attempts++;
+      }
+      return i;
+    }
+
+    selected = nextEnabled(-1, 1);
+
     // Hide cursor and draw initial items
     out.write("\x1b[?25l");
     renderItems();
@@ -280,20 +296,6 @@ export function interactiveMenu(
     if (stdin.setRawMode) stdin.setRawMode(true);
     stdin.resume();
     stdin.setEncoding("utf-8");
-
-    // Skip over disabled items when navigating
-    function nextEnabled(from: number, dir: 1 | -1): number {
-      let i = (from + dir + items.length) % items.length;
-      let attempts = 0;
-      while (items[i]!.disabled && attempts < items.length) {
-        i = (i + dir + items.length) % items.length;
-        attempts++;
-      }
-      return i;
-    }
-
-    // Start cursor on first enabled item
-    selected = nextEnabled(-1, 1);
 
     function onData(key: string) {
       if (key === "\x1b[A" || key === "k") {
