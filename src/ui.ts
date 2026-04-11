@@ -184,6 +184,10 @@ export interface MenuItem {
   label: string;
   value: string;
   description: string;
+  /** When true the item is rendered dimmed and cannot be selected. */
+  disabled?: boolean;
+  /** Shown inline when the user tries to select a disabled item. */
+  disabledReason?: string;
 }
 
 // Entropy flair frames — subtle cycling diamond in the banner subtitle
@@ -211,19 +215,37 @@ export function interactiveMenu(
     let flairIdx = 0;
     let hasDrawn = false;
 
-    function renderItems() {
-      // On redraws, move cursor up to overwrite the previous menu
+    // Lines used by the inline error message (0 when none shown)
+    let errorLines = 0;
+
+    function renderItems(errorMsg?: string) {
+      // On redraws, move cursor up to overwrite previous menu + any error
       if (hasDrawn) {
-        out.write(`\x1b[${items.length}A`);
+        out.write(`\x1b[${items.length + errorLines}A`);
       }
       out.write("\x1b[J"); // clear from cursor down
       hasDrawn = true;
+      errorLines = 0;
+
       for (let i = 0; i < items.length; i++) {
         const item = items[i]!;
-        const pointer = i === selected ? cyan("  ❯ ") : "    ";
-        const label = i === selected ? bold(item.label) : item.label;
-        const desc = dim(item.description);
-        out.write(`${pointer}${label}  ${desc}\n`);
+        if (item.disabled) {
+          const pointer = "    ";
+          const label = dim(item.label);
+          const desc = dim(item.description);
+          const lock = dim("✗");
+          out.write(`${pointer}${label}  ${desc}  ${lock}\n`);
+        } else {
+          const pointer = i === selected ? cyan("  ❯ ") : "    ";
+          const label = i === selected ? bold(item.label) : item.label;
+          const desc = dim(item.description);
+          out.write(`${pointer}${label}  ${desc}\n`);
+        }
+      }
+
+      if (errorMsg) {
+        out.write(`\n  ${red("  ✗")} ${errorMsg}\n`);
+        errorLines = 2;
       }
     }
 
@@ -231,8 +253,10 @@ export function interactiveMenu(
       if (!flair || !isTTY) return;
       flairIdx++;
       const ch = FLAIR_FRAMES[flairIdx % FLAIR_FRAMES.length]!;
-      // Move up from current position to the flair line, update char, move back
-      const linesUp = items.length + flair.linesAboveSave;
+      // Move up from current position to the flair line, update char, move back.
+      // Include errorLines so the flair targets the correct line when an inline
+      // error banner is visible below the menu.
+      const linesUp = items.length + errorLines + flair.linesAboveSave;
       out.write(
         `\x1b[${linesUp}F` +      // move up N lines (to start of line)
         `\x1b[${flair.col}G` +    // move to column
@@ -245,6 +269,20 @@ export function interactiveMenu(
     if (title) {
       out.write(`  ${bold(title)}\n\n`);
     }
+
+    // Start cursor on first enabled item before the initial render so the
+    // pointer appears correctly on the first draw.
+    function nextEnabled(from: number, dir: 1 | -1): number {
+      let i = (from + dir + items.length) % items.length;
+      let attempts = 0;
+      while (items[i]!.disabled && attempts < items.length) {
+        i = (i + dir + items.length) % items.length;
+        attempts++;
+      }
+      return i;
+    }
+
+    selected = nextEnabled(-1, 1);
 
     // Hide cursor and draw initial items
     out.write("\x1b[?25l");
@@ -261,14 +299,20 @@ export function interactiveMenu(
 
     function onData(key: string) {
       if (key === "\x1b[A" || key === "k") {
-        selected = (selected - 1 + items.length) % items.length;
+        selected = nextEnabled(selected, -1);
         renderItems();
       } else if (key === "\x1b[B" || key === "j") {
-        selected = (selected + 1) % items.length;
+        selected = nextEnabled(selected, 1);
         renderItems();
       } else if (key === "\r" || key === "\n") {
-        cleanup();
-        resolve(items[selected]!.value);
+        const item = items[selected]!;
+        if (item.disabled) {
+          const reason = item.disabledReason ?? "not available";
+          renderItems(reason);
+        } else {
+          cleanup();
+          resolve(item.value);
+        }
       } else if (key === "\x03") {
         cleanup();
         process.exit(0);
@@ -419,7 +463,7 @@ export function summaryBox(opts: {
     console.log(boxLine(`    syn CLI access:`, width));
     console.log(boxLine(`      ${dim(`export ${ENV_KEYS.SYN_API_USER}=${username}`)}`, width));
     console.log(boxLine(`      ${dim(`export ${ENV_KEYS.SYN_API_PASSWORD}=$(grep ${ENV_KEYS.SYN_API_PASSWORD} ${envPath} | cut -d= -f2)`)}`, width));
-    console.log(boxLine(`    Rotate: ${cyan(`${BIN} credentials rotate`)}`, width));
+    console.log(boxLine(`    View: ${cyan(`${BIN} credentials show`)}`, width));
   }
 
   console.log(`  ${dim(BOX.bl + BOX.h.repeat(width + 2) + BOX.br)}`);

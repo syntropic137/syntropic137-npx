@@ -45,14 +45,15 @@ npx @syntropic137/setup init [options]
 After initial setup, manage your stack with:
 
 ```sh
-npx @syntropic137/setup status    # Container health (docker compose ps)
-npx @syntropic137/setup stop      # Stop the stack
-npx @syntropic137/setup start     # Start the stack
-npx @syntropic137/setup logs      # Tail container logs
-npx @syntropic137/setup update    # Pull latest images and restart
+npx @syntropic137/setup status       # Container health (docker compose ps)
+npx @syntropic137/setup stop         # Stop the stack
+npx @syntropic137/setup start        # Start the stack
+npx @syntropic137/setup logs         # Tail container logs
+npx @syntropic137/setup update       # Pull latest images and restart
+npx @syntropic137/setup credentials  # View gateway credentials (show / rollback)
 ```
 
-All commands accept `--dir <path>` if your install directory isn't the default.
+All commands accept `--dir <path>` if your install directory isn't the default `~/.syntropic137`.
 
 ## How the GitHub App Manifest flow works
 
@@ -78,6 +79,7 @@ Everything lives in `~/.syntropic137/`:
 ├── selfhost-entrypoint.sh             # Secret injection at container startup
 ├── selfhost.env.example               # Reference template
 ├── .env                               # Your configuration (chmod 600)
+├── .env.backup                        # Pre-rotation backup, consumed by credentials rollback (written by rotation once re-enabled)
 ├── init-db/
 │   └── 01-create-databases.sql        # Database schema
 ├── secrets/
