@@ -179,17 +179,36 @@ export class InitFlow {
       info("Found credentials in environment");
       envValues[ENV_KEYS.CLAUDE_CODE_OAUTH_TOKEN] = existingOauth;
     } else if (existingKey) {
-      info("Found ANTHROPIC_API_KEY in environment");
-      envValues[ENV_KEYS.ANTHROPIC_API_KEY] = existingKey;
-    } else {
-      info("Anthropic credentials are required to run agents.");
-      info("Enter your Anthropic API key, or set ANTHROPIC_API_KEY in your environment.");
-      info("Get a key at: https://console.anthropic.com/settings/keys");
-      const apiKey = await promptSecret(ENV_KEYS.ANTHROPIC_API_KEY);
-      if (apiKey) {
-        envValues[ENV_KEYS.ANTHROPIC_API_KEY] = apiKey;
+      // Prefix-detect what was actually exported. A user who exported their
+      // Anthropic credential as ANTHROPIC_API_KEY may have pasted any token
+      // type into that variable; route it to the correct field by prefix.
+      const routed = routeAnthropicCredential(existingKey);
+      if (routed) {
+        info("Found credentials in environment");
+        envValues[routed.envKey] = routed.value;
       } else {
-        warn("No API key provided. You can add it to .env later.");
+        warn("ANTHROPIC_API_KEY in environment does not look like a valid Anthropic credential; ignoring.");
+      }
+    } else {
+      // Neutral prompt copy: do not name the credential type. Accept whatever
+      // the user pastes, then prefix-detect to route it to the correct env
+      // var. See ADR-024 (platform repo) for why this matters: Claude Code CLI
+      // requires the credential under the matching env var name; routing it
+      // to the wrong field silently breaks every workflow run.
+      info("Anthropic credentials are required to run agents.");
+      info("Paste your Anthropic credential below.");
+      info("Get a credential at: https://console.anthropic.com/settings/keys");
+      const credential = await promptSecret("ANTHROPIC_CREDENTIAL");
+      if (!credential) {
+        warn("No credential provided. You can add it to .env later.");
+      } else {
+        const routed = routeAnthropicCredential(credential);
+        if (routed) {
+          envValues[routed.envKey] = routed.value;
+          info(`Credential stored as ${routed.envKey}.`);
+        } else {
+          warn("Credential does not look like a valid Anthropic token (expected sk-ant-… prefix). Skipping; you can add it to .env manually later.");
+        }
       }
     }
 
@@ -930,6 +949,41 @@ ${usageLines}
     }
     return dir;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Anthropic credential routing
+// ---------------------------------------------------------------------------
+
+/**
+ * Route a pasted Anthropic credential to the correct env var by prefix.
+ *
+ * Claude Code CLI requires the credential under a specific env var matching
+ * its type. Pasting an OAuth token into ANTHROPIC_API_KEY (or vice versa)
+ * silently breaks every workflow run because the platform reads each var
+ * independently and the CLI rejects mismatched types at its local format
+ * check.
+ *
+ * Returns null if the token does not look like a recognised Anthropic
+ * credential. The caller is responsible for messaging that to the user.
+ *
+ * Notes on the prefix table (current as of 2026-05):
+ *   sk-ant-oat01-…  Claude Code OAuth token from `claude setup-token`
+ *   sk-ant-…        Anthropic API key from console.anthropic.com (anything
+ *                   else with the sk-ant- prefix that isn't oat01)
+ */
+export function routeAnthropicCredential(
+  raw: string,
+): { envKey: string; value: string } | null {
+  const value = raw.trim();
+  if (!value) return null;
+  if (value.startsWith("sk-ant-oat01-")) {
+    return { envKey: ENV_KEYS.CLAUDE_CODE_OAUTH_TOKEN, value };
+  }
+  if (value.startsWith("sk-ant-")) {
+    return { envKey: ENV_KEYS.ANTHROPIC_API_KEY, value };
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
