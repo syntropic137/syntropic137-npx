@@ -175,20 +175,28 @@ export class InitFlow {
     const existingKey = process.env.ANTHROPIC_API_KEY || "";
     const existingOauth = process.env.CLAUDE_CODE_OAUTH_TOKEN || "";
 
+    // Try to use what's already in the environment first. If found but malformed,
+    // warn AND fall through to the interactive prompt so the user can correct it
+    // during init rather than ending with no credential at all.
+    let routedFromEnv: { envKey: string; value: string } | null = null;
     if (existingOauth) {
-      info("Found credentials in environment");
-      envValues[ENV_KEYS.CLAUDE_CODE_OAUTH_TOKEN] = existingOauth;
+      routedFromEnv = routeAnthropicCredential(existingOauth);
+      if (!routedFromEnv) {
+        warn("CLAUDE_CODE_OAUTH_TOKEN in environment does not look like a valid Anthropic credential; will prompt instead.");
+      }
     } else if (existingKey) {
       // Prefix-detect what was actually exported. A user who exported their
       // Anthropic credential as ANTHROPIC_API_KEY may have pasted any token
       // type into that variable; route it to the correct field by prefix.
-      const routed = routeAnthropicCredential(existingKey);
-      if (routed) {
-        info("Found credentials in environment");
-        envValues[routed.envKey] = routed.value;
-      } else {
-        warn("ANTHROPIC_API_KEY in environment does not look like a valid Anthropic credential; ignoring.");
+      routedFromEnv = routeAnthropicCredential(existingKey);
+      if (!routedFromEnv) {
+        warn("ANTHROPIC_API_KEY in environment does not look like a valid Anthropic credential; will prompt instead.");
       }
+    }
+
+    if (routedFromEnv) {
+      info("Found credentials in environment");
+      envValues[routedFromEnv.envKey] = routedFromEnv.value;
     } else {
       // Neutral prompt copy: do not name the credential type. Accept whatever
       // the user pastes, then prefix-detect to route it to the correct env
@@ -198,7 +206,8 @@ export class InitFlow {
       info("Anthropic credentials are required to run agents.");
       info("Paste your Anthropic credential below.");
       info("Get a credential at: https://console.anthropic.com/settings/keys");
-      const credential = await promptSecret("ANTHROPIC_CREDENTIAL");
+      const raw = await promptSecret("Anthropic credential");
+      const credential = raw.trim();
       if (!credential) {
         warn("No credential provided. You can add it to .env later.");
       } else {
