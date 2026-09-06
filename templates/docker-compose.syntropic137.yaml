@@ -1,4 +1,4 @@
-# Pinned to release v0.27.0 — image digests verified by cosign
+# Pinned to release v0.28.0 — image digests verified by cosign
 # =============================================================================
 # Syntropic137 — Self-Host Docker Compose (Published)
 # =============================================================================
@@ -23,7 +23,7 @@
 name: syntropic137_selfhost
 services:
   timescaledb:
-    image: timescale/timescaledb:2.25.1-pg16
+    image: timescale/timescaledb:2.29.2-pg16
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-syn}
       POSTGRES_USER: ${POSTGRES_USER:-syn}
@@ -175,7 +175,7 @@ services:
       options:
         max-size: 10m
         max-file: "3"
-    image: ghcr.io/syntropic137/syn-collector@sha256:15560a4b725cacbb640c4e16371907dbc0a7aa3e3811877ee8b47a968126056a
+    image: ghcr.io/syntropic137/syn-collector@sha256:e936472f9bc05916d226b679b1324e4956bd38a03b64d8c9c9ebc709f00ed0ed
   docker-socket-proxy:
     image: tecnativa/docker-socket-proxy:0.3.0
     environment:
@@ -311,14 +311,15 @@ services:
       options:
         max-size: 10m
         max-file: "3"
-    image: ghcr.io/syntropic137/syn-api@sha256:c97cf1093eb782d7241a3977f5474543b87dfd1662c5c142632018305a5ccc60
+    image: ghcr.io/syntropic137/syn-api@sha256:a5107eed9ca21780bfdcdb19bd7a9104fec7b2cb3e94acb4c1cd5853bd11b403
   gateway:
     container_name: syn137-gateway
     ports:
-    - 127.0.0.1:${SYN_GATEWAY_PORT:-8137}:80
+    - ${SYN_GATEWAY_BIND:-127.0.0.1}:${SYN_GATEWAY_PORT:-8137}:80
     environment:
       SYN_API_PASSWORD: ${SYN_API_PASSWORD:-}
       SYN_API_USER: ${SYN_API_USER:-admin}
+      SYN_GATEWAY_BIND: ${SYN_GATEWAY_BIND:-127.0.0.1}
     healthcheck:
       test:
       - CMD
@@ -359,7 +360,7 @@ services:
         max-file: "3"
     networks:
     - syn-internal
-    image: ghcr.io/syntropic137/syn-gateway@sha256:8d6095568aae104c3bca896a13c4b59b851e055202aa487b734a324273f4fa69
+    image: ghcr.io/syntropic137/syn-gateway@sha256:c0f3f90f34202dc0f50fab1c8f1af4f6fb51773c2bdcf38bcbabe280733d8aee
   cloudflared:
     image: cloudflare/cloudflared:2026.2.0
     container_name: syn137-cloudflared
@@ -500,7 +501,7 @@ services:
       options:
         max-size: 10m
         max-file: "3"
-    image: ghcr.io/syntropic137/sidecar-proxy@sha256:044ec8328c76bd106bf2961e980917dae383eadf070adf4b6acb4c0c5869ea41
+    image: ghcr.io/syntropic137/sidecar-proxy@sha256:7a896bae083151cd939a8891ea4cffcbac0afe52d3254b26b3e288bb8f8e713e
   token-injector:
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
@@ -519,7 +520,7 @@ services:
       options:
         max-size: 5m
         max-file: "3"
-    image: ghcr.io/syntropic137/token-injector@sha256:00786a22a24e3f3c80fb48887d4beca53e3ec8006d7ea794b9acbd3982a3cf47
+    image: ghcr.io/syntropic137/token-injector@sha256:d6f851842499472e0b880a63ffdf28b3e54bb4892128da257f57c313b786ec53
 secrets:
   db_password:
     file: ./secrets/db-password.secret
