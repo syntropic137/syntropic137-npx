@@ -50,7 +50,7 @@ npx @syntropic137/setup stop         # Stop the stack
 npx @syntropic137/setup start        # Start the stack
 npx @syntropic137/setup logs         # Tail container logs
 npx @syntropic137/setup update       # Pull latest images and restart
-npx @syntropic137/setup credentials  # View gateway credentials (show / rollback)
+npx @syntropic137/setup credentials  # View, rotate, or roll back credentials
 ```
 
 All commands accept `--dir <path>` if your install directory isn't the default `~/.syntropic137`.
@@ -79,7 +79,7 @@ Everything lives in `~/.syntropic137/`:
 ├── selfhost-entrypoint.sh             # Secret injection at container startup
 ├── selfhost.env.example               # Reference template
 ├── .env                               # Your configuration (chmod 600)
-├── .env.backup                        # Pre-rotation backup, consumed by credentials rollback (written by rotation once re-enabled)
+├── .env.backup                        # Pre-rotation backup, consumed by credentials rollback
 ├── init-db/
 │   └── 01-create-databases.sql        # Database schema
 ├── secrets/

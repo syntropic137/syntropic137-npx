@@ -26,6 +26,7 @@ import {
 import type { MenuItem } from "./ui.js";
 import { checkDocker, DockerService } from "./docker.js";
 import { SecretsManager } from "./secrets.js";
+import { rotateAll, type RotationDeps } from "./rotation.js";
 import { ConfigManager } from "./config.js";
 import { GitHubAppSetup, openBrowser } from "./manifest.js";
 import {
@@ -723,9 +724,10 @@ export class CLI {
     if (!action) {
       const items: MenuItem[] = [
         { label: "show",     value: "show",     description: "View access instructions and copy commands" },
+        { label: "rotate",   value: "rotate",   description: "Generate new service credentials, verified against each service" },
         { label: "rollback", value: "rollback", description: "Restore credentials from the last backup" },
       ];
-      action = (await interactiveMenu(items, "What would you like to do?")) as "show" | "rollback";
+      action = (await interactiveMenu(items, "What would you like to do?")) as "show" | "rotate" | "rollback";
       console.log();
     }
 
@@ -739,16 +741,111 @@ export class CLI {
       return;
     }
 
-    // ── rotate: temporarily disabled (phase 2 tracked in issue #56) ─────
-    // Rotation updates .env and secret files but the event store password is
-    // baked in at container init time — after a stack restart the event store
-    // can no longer authenticate to the database, breaking the system with no
-    // safe recovery path. Re-enable once service-aware two-phase rotation is
-    // implemented. See: https://github.com/syntropic137/syntropic137-npx/issues/56
+    await this.credentialsRotate(installDir);
+  }
+
+  /**
+   * Rotate the three generated service secrets, verifying each against its own
+   * service before the new value is left in place (#56).
+   *
+   * Each server adopts a new credential differently, so this is not a loop over
+   * three files. See src/rotation.ts for the measured mechanisms and the
+   * ordering they imply.
+   */
+  private async credentialsRotate(installDir: string): Promise<void> {
+    const secretsDir = path.join(installDir, "secrets");
+    const envPath = path.join(installDir, ".env");
+
+    if (!fs.existsSync(secretsDir)) {
+      fail("No secrets directory found.");
+      info(`Expected: ${secretsDir}`);
+      return;
+    }
+
+    const env = new ConfigManager(installDir).readEnv();
+
     console.log();
-    warn("Credential rotation is temporarily disabled.");
-    info("Track progress: https://github.com/syntropic137/syntropic137-npx/issues/56");
+    info(bold("Credential Rotation"));
     console.log();
+    info("This generates new PostgreSQL, Redis and MinIO credentials, asks each");
+    info("server to adopt its new value, and then authenticates to confirm it did.");
+    info("Any credential that cannot be verified is rolled back automatically.");
+    console.log();
+    warn("Services restart during this. Do not run it while work is in flight.");
+    console.log();
+
+    const proceed = await confirm("Rotate service credentials?", false);
+    if (!proceed) {
+      info("Cancelled.");
+      return;
+    }
+
+    // The .env backup keeps `credentials rollback` working as before.
+    if (fs.existsSync(envPath)) {
+      fs.copyFileSync(envPath, path.join(installDir, ".env.backup"));
+      fs.chmodSync(path.join(installDir, ".env.backup"), 0o600);
+    }
+
+    const deps: RotationDeps = {
+      exec: (service, argv, extraEnv) =>
+        execFileSync("docker", ["compose", "-f", COMPOSE_FILE, "exec", "-T", service, ...argv], {
+          cwd: installDir,
+          encoding: "utf8",
+          env: { ...process.env, ...(extraEnv ?? {}) },
+        }),
+      recreate: (services) => {
+        execFileSync("docker", ["compose", "-f", COMPOSE_FILE, "up", "-d", ...services], {
+          cwd: installDir,
+          stdio: "pipe",
+        });
+      },
+      readSecret: (file) => fs.readFileSync(path.join(secretsDir, file), "utf8").trim(),
+      writeSecret: (file, value) => {
+        const target = path.join(secretsDir, file);
+        if (fs.existsSync(target)) {
+          fs.copyFileSync(target, target + ".bak");
+          fs.chmodSync(target + ".bak", 0o600);
+        }
+        fs.writeFileSync(target, value, { mode: 0o600 });
+      },
+      log: (message) => info(message),
+    };
+
+    const cfg = {
+      postgresUser: env["POSTGRES_USER"] ?? "syn",
+      postgresDb: env["POSTGRES_DB"] ?? "syn",
+    };
+
+    console.log();
+    let results;
+    try {
+      results = rotateAll(deps, cfg);
+    } catch (err) {
+      // Only thrown when a rotation failed AND its rollback also failed, which
+      // is the one case an operator must not be allowed to scroll past.
+      console.log();
+      fail("Rotation failed and could not be rolled back.");
+      if (err instanceof Error) info(err.message);
+      info(`Previous values are in ${secretsDir} alongside each .bak file.`);
+      process.exitCode = 1;
+      return;
+    }
+
+    console.log();
+    const rotated = results.filter((r) => r.status === "rotated");
+    const reverted = results.filter((r) => r.status !== "rotated");
+
+    for (const r of rotated) success(`${r.label} rotated and verified`);
+    for (const r of reverted) warn(`${r.label} rolled back: ${r.error ?? "unknown reason"}`);
+
+    console.log();
+    if (reverted.length === 0) {
+      success(`All ${rotated.length} service credentials rotated.`);
+    } else {
+      warn(`${rotated.length} rotated, ${reverted.length} rolled back.`);
+      info("Rolled-back credentials are unchanged and still working.");
+      process.exitCode = 1;
+    }
   }
 
   /**
