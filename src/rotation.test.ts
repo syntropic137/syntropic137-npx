@@ -10,7 +10,7 @@ import {
   type CredentialSpec,
 } from "./rotation.js";
 
-const CFG: RotationConfig = { postgresUser: "syn", postgresDb: "syn" };
+const CFG: RotationConfig = { postgresUser: "syn", postgresDb: "syn", minioUser: "minioadmin" };
 const OLD = "a".repeat(64);
 
 /**
@@ -26,6 +26,7 @@ function harness(opts: {
   secrets?: Record<string, string>;
 } = {}) {
   const calls: string[] = [];
+  const users: string[] = [];
   const secrets: Record<string, string> = opts.secrets ?? {};
   for (const c of CREDENTIALS) secrets[c.file] ??= OLD;
 
@@ -73,6 +74,11 @@ function harness(opts: {
       }
       if (joined.includes("alias set")) {
         calls.push(`verify:${service}`);
+        // The user is the second-to-last argv entry; record it so a hardcoded
+        // name cannot pass. MinIO rejects an unknown user with the SAME error
+        // it gives a wrong password, so getting this wrong fails every value
+        // and looks like an unrecoverable rotation.
+        users.push(argv[argv.length - 2] ?? "");
         const presented = argv[argv.length - 1] ?? "";
         if (opts.brokenAuth?.includes(service)) throw new Error(`${service} unreachable`);
         return presented === held[service]
@@ -101,7 +107,7 @@ function harness(opts: {
     log() {},
   };
 
-  return { deps, calls, secrets, held };
+  return { deps, calls, secrets, held, users };
 }
 
 const byFile = (f: string): CredentialSpec =>
@@ -215,5 +221,22 @@ describe("rollback", () => {
     expect(() => rotateOne(deps, CFG, byFile("db-password.secret"))).toThrow(
       /rotation failed AND rollback failed/,
     );
+  });
+});
+
+describe("credentials come from configuration, not from assumptions", () => {
+  it("authenticates to MinIO as the CONFIGURED root user", () => {
+    // rotation.ts hardcoded "synadmin" while the compose file defaults
+    // MINIO_ROOT_USER to "minioadmin". `mc` answers an unknown user with
+    // "The Access Key Id you provided does not exist in our records" - the same
+    // shape as a bad password - so verification failed for the new value AND
+    // the old one, and the tool reported the rotation as unrecoverable while
+    // the server was untouched and healthy. Caught only by running it against
+    // a real stack; nothing here pinned the name.
+    const { deps, users } = harness();
+    rotateOne(deps, { ...CFG, minioUser: "someone-else" }, byFile("minio-password.secret"));
+
+    expect(users).toContain("someone-else");
+    expect(users).not.toContain("synadmin");
   });
 });

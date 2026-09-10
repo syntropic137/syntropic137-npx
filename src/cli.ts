@@ -787,17 +787,44 @@ export class CLI {
     }
 
     const deps: RotationDeps = {
-      exec: (service, argv, extraEnv) =>
-        execFileSync("docker", ["compose", "-f", COMPOSE_FILE, "exec", "-T", service, ...argv], {
-          cwd: installDir,
-          encoding: "utf8",
-          env: { ...process.env, ...(extraEnv ?? {}) },
-        }),
+      exec: (service, argv, extraEnv) => {
+        // `env` here sets the environment of the HOST docker client, which the
+        // container never sees: `docker compose exec` does not forward the
+        // caller's environment. PGPASSWORD set that way left psql prompting for
+        // a password on stdin, so every PostgreSQL verification failed - and,
+        // because rollback verifies the same way, rollback "failed" too and the
+        // operator was told the rotation was unrecoverable while the stack was
+        // in fact fine. The value has to travel as `-e KEY=VALUE` on the exec
+        // itself.
+        const envFlags = Object.entries(extraEnv ?? {}).flatMap(([k, v]) => ["-e", `${k}=${v}`]);
+        return execFileSync(
+          "docker",
+          ["compose", "-f", COMPOSE_FILE, "exec", "-T", ...envFlags, service, ...argv],
+          {
+            cwd: installDir,
+            encoding: "utf8",
+            // Never inherit stdin. If a credential does not arrive, the tool
+            // must fail rather than block forever on an interactive prompt.
+            stdio: ["ignore", "pipe", "pipe"],
+          },
+        );
+      },
       recreate: (services) => {
-        execFileSync("docker", ["compose", "-f", COMPOSE_FILE, "up", "-d", ...services], {
-          cwd: installDir,
-          stdio: "pipe",
-        });
+        // --force-recreate is load-bearing. A secret is a FILE mount, so
+        // changing its contents changes nothing compose can see: plain
+        // `up -d` compares the rendered config, finds it identical, and
+        // leaves the container running with the credential it started with.
+        //
+        // For MinIO that meant the server never adopted the new password and
+        // verification failed against a server nobody had changed. For the
+        // command-adoption services it means the CLIENTS keep whatever they
+        // read at startup, so the rotation looks verified - the check is
+        // against the server - while a client is still holding the old value.
+        execFileSync(
+          "docker",
+          ["compose", "-f", COMPOSE_FILE, "up", "-d", "--force-recreate", ...services],
+          { cwd: installDir, stdio: "pipe" },
+        );
       },
       readSecret: (file) => fs.readFileSync(path.join(secretsDir, file), "utf8").trim(),
       writeSecret: (file, value) => {
@@ -814,6 +841,9 @@ export class CLI {
     const cfg = {
       postgresUser: env["POSTGRES_USER"] ?? "syn",
       postgresDb: env["POSTGRES_DB"] ?? "syn",
+      // Same default the compose file uses for MINIO_ROOT_USER. A mismatch here
+      // fails verification for every value, old and new alike.
+      minioUser: env["MINIO_ROOT_USER"] ?? "minioadmin",
     };
 
     console.log();

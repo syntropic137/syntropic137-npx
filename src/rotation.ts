@@ -61,6 +61,15 @@ export interface RotationDeps {
 export interface RotationConfig {
   postgresUser: string;
   postgresDb: string;
+  /**
+   * MinIO's root user. Read from configuration rather than assumed: the
+   * compose file defaults MINIO_ROOT_USER to `minioadmin`, and an operator may
+   * set it to anything. Hardcoding a name here made `mc alias set` fail with
+   * "The Access Key Id you provided does not exist in our records" for BOTH the
+   * new and the old password, so the rotation reported itself unrecoverable
+   * while the server was untouched and healthy.
+   */
+  minioUser: string;
 }
 
 /** How a given server comes to accept a new credential. */
@@ -190,9 +199,9 @@ const minio: CredentialSpec = {
   // and the file must therefore be written BEFORE the server is recreated.
   adoption: "restart",
 
-  verify(d, _cfg, value) {
+  verify(d, cfg, value) {
     const out = d.exec("minio", [
-      "mc", "alias", "set", "rotcheck", "http://localhost:9000", "synadmin", value,
+      "mc", "alias", "set", "rotcheck", "http://localhost:9000", cfg.minioUser, value,
     ]);
     if (!/successfully/i.test(out)) {
       throw new Error(`MinIO did not accept the new password (got: ${out.trim() || "no output"})`);
