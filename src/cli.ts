@@ -26,7 +26,13 @@ import {
 import type { MenuItem } from "./ui.js";
 import { checkDocker, DockerService } from "./docker.js";
 import { SecretsManager } from "./secrets.js";
-import { rotateAll, type RotationDeps } from "./rotation.js";
+import {
+  CREDENTIALS,
+  rollbackOne,
+  rotateAll,
+  type RotationConfig,
+  type RotationDeps,
+} from "./rotation.js";
 import { ConfigManager } from "./config.js";
 import { GitHubAppSetup, openBrowser } from "./manifest.js";
 import {
@@ -745,6 +751,71 @@ export class CLI {
   }
 
   /**
+   * Everything the rotation touches outside this process, in one place.
+   *
+   * Shared by rotate and rollback deliberately: they must reach docker the same
+   * way, or a rollback can fail for reasons the rotation would not have hit.
+   */
+  private rotationDeps(installDir: string, secretsDir: string): RotationDeps {
+    return {
+      exec: (service, argv, extraEnv) => {
+        // `env` here sets the environment of the HOST docker client, which the
+        // container never sees: `docker compose exec` does not forward the
+        // caller's environment. PGPASSWORD set that way left psql prompting for
+        // a password on stdin, so every PostgreSQL verification failed - and,
+        // because rollback verifies the same way, rollback "failed" too and the
+        // operator was told the rotation was unrecoverable while the stack was
+        // in fact fine. The value has to travel as `-e KEY=VALUE` on the exec.
+        const envFlags = Object.entries(extraEnv ?? {}).flatMap(([k, v]) => ["-e", `${k}=${v}`]);
+        return execFileSync(
+          "docker",
+          ["compose", "-f", COMPOSE_FILE, "exec", "-T", ...envFlags, service, ...argv],
+          {
+            cwd: installDir,
+            encoding: "utf8",
+            // Never inherit stdin. If a credential does not arrive, the tool
+            // must fail rather than block forever on an interactive prompt.
+            stdio: ["ignore", "pipe", "pipe"],
+          },
+        );
+      },
+      recreate: (services) => {
+        // --force-recreate is load-bearing. A secret is a FILE mount, so
+        // changing its contents changes nothing compose can see: plain `up -d`
+        // compares the rendered config, finds it identical, and leaves the
+        // container running with the credential it started with. MinIO then
+        // never adopts, and command-adoption CLIENTS keep the value they read
+        // at startup while the server-side check still passes.
+        execFileSync(
+          "docker",
+          ["compose", "-f", COMPOSE_FILE, "up", "-d", "--force-recreate", ...services],
+          { cwd: installDir, stdio: "pipe" },
+        );
+      },
+      readSecret: (file) => fs.readFileSync(path.join(secretsDir, file), "utf8").trim(),
+      writeSecret: (file, value) => {
+        const target = path.join(secretsDir, file);
+        if (fs.existsSync(target)) {
+          fs.copyFileSync(target, target + ".bak");
+          fs.chmodSync(target + ".bak", 0o600);
+        }
+        fs.writeFileSync(target, value, { mode: 0o600 });
+      },
+      log: (message) => info(message),
+    };
+  }
+
+  private rotationConfig(env: Record<string, string>): RotationConfig {
+    return {
+      postgresUser: env["POSTGRES_USER"] ?? "syn",
+      postgresDb: env["POSTGRES_DB"] ?? "syn",
+      // Same default the compose file uses for MINIO_ROOT_USER. A mismatch here
+      // fails verification for every value, old and new alike.
+      minioUser: env["MINIO_ROOT_USER"] ?? "minioadmin",
+    };
+  }
+
+  /**
    * Rotate the three generated service secrets, verifying each against its own
    * service before the new value is left in place (#56).
    *
@@ -786,65 +857,8 @@ export class CLI {
       fs.chmodSync(path.join(installDir, ".env.backup"), 0o600);
     }
 
-    const deps: RotationDeps = {
-      exec: (service, argv, extraEnv) => {
-        // `env` here sets the environment of the HOST docker client, which the
-        // container never sees: `docker compose exec` does not forward the
-        // caller's environment. PGPASSWORD set that way left psql prompting for
-        // a password on stdin, so every PostgreSQL verification failed - and,
-        // because rollback verifies the same way, rollback "failed" too and the
-        // operator was told the rotation was unrecoverable while the stack was
-        // in fact fine. The value has to travel as `-e KEY=VALUE` on the exec
-        // itself.
-        const envFlags = Object.entries(extraEnv ?? {}).flatMap(([k, v]) => ["-e", `${k}=${v}`]);
-        return execFileSync(
-          "docker",
-          ["compose", "-f", COMPOSE_FILE, "exec", "-T", ...envFlags, service, ...argv],
-          {
-            cwd: installDir,
-            encoding: "utf8",
-            // Never inherit stdin. If a credential does not arrive, the tool
-            // must fail rather than block forever on an interactive prompt.
-            stdio: ["ignore", "pipe", "pipe"],
-          },
-        );
-      },
-      recreate: (services) => {
-        // --force-recreate is load-bearing. A secret is a FILE mount, so
-        // changing its contents changes nothing compose can see: plain
-        // `up -d` compares the rendered config, finds it identical, and
-        // leaves the container running with the credential it started with.
-        //
-        // For MinIO that meant the server never adopted the new password and
-        // verification failed against a server nobody had changed. For the
-        // command-adoption services it means the CLIENTS keep whatever they
-        // read at startup, so the rotation looks verified - the check is
-        // against the server - while a client is still holding the old value.
-        execFileSync(
-          "docker",
-          ["compose", "-f", COMPOSE_FILE, "up", "-d", "--force-recreate", ...services],
-          { cwd: installDir, stdio: "pipe" },
-        );
-      },
-      readSecret: (file) => fs.readFileSync(path.join(secretsDir, file), "utf8").trim(),
-      writeSecret: (file, value) => {
-        const target = path.join(secretsDir, file);
-        if (fs.existsSync(target)) {
-          fs.copyFileSync(target, target + ".bak");
-          fs.chmodSync(target + ".bak", 0o600);
-        }
-        fs.writeFileSync(target, value, { mode: 0o600 });
-      },
-      log: (message) => info(message),
-    };
-
-    const cfg = {
-      postgresUser: env["POSTGRES_USER"] ?? "syn",
-      postgresDb: env["POSTGRES_DB"] ?? "syn",
-      // Same default the compose file uses for MINIO_ROOT_USER. A mismatch here
-      // fails verification for every value, old and new alike.
-      minioUser: env["MINIO_ROOT_USER"] ?? "minioadmin",
-    };
+    const deps = this.rotationDeps(installDir, secretsDir);
+    const cfg = this.rotationConfig(env);
 
     console.log();
     let results;
@@ -885,21 +899,43 @@ export class CLI {
    * command returns the stack to its last known-good credential state.
    */
   private async credentialsRollback(installDir: string): Promise<void> {
-    const backupPath = path.join(installDir, ".env.backup");
+    const secretsDir = path.join(installDir, "secrets");
 
-    if (!fs.existsSync(backupPath)) {
+    // Rotation changes two things: the value in secrets/<name>.secret, and the
+    // credential the SERVER holds. It does not touch .env - none of these three
+    // credentials live there.
+    //
+    // This command used to restore .env from .env.backup and restart the stack.
+    // That restored nothing (`grep -c` for the service passwords in .env
+    // returns 0), bounced every container, and then reported "Credentials
+    // restored from backup". A destructive no-op that claimed success.
+    //
+    // A real rollback puts each server back on its previous credential and
+    // leaves the file agreeing with it, which is exactly what rotation's own
+    // rollback path does - reused here rather than reimplemented.
+    const restorable = CREDENTIALS.filter((spec) =>
+      fs.existsSync(path.join(secretsDir, spec.file + ".bak")),
+    );
+
+    if (restorable.length === 0) {
       fail("No credential backup found.");
-      info(`Expected: ${backupPath}`);
-      info("A backup is created automatically before each rotation. If none exists,");
+      info(`Expected: ${path.join(secretsDir, "<name>.secret.bak")}`);
+      info("A backup is written automatically before each rotation. If none exists,");
       info("credentials have not been rotated via this tool.");
       return;
     }
 
+    const env = new ConfigManager(installDir).readEnv();
+
     console.log();
     info(bold("Credential Rollback"));
     console.log();
-    info(`Backup: ${dim(backupPath)}`);
-    info("This will restore the previous .env and restart the stack.");
+    info(`Restoring: ${restorable.map((s) => s.label).join(", ")}`);
+    info("Each server is put back on its previous credential and then");
+    info("authenticated with it, so a rollback that did not take is not");
+    info("reported as one that did.");
+    console.log();
+    warn("Services restart during this. Do not run it while work is in flight.");
     console.log();
 
     const proceed = await confirm("Restore previous credentials?", false);
@@ -908,15 +944,29 @@ export class CLI {
       return;
     }
 
-    fs.copyFileSync(backupPath, path.join(installDir, ".env"));
-    fs.chmodSync(path.join(installDir, ".env"), 0o600);
+    const deps = this.rotationDeps(installDir, secretsDir);
+    const cfg = this.rotationConfig(env);
 
-    info("Restarting the stack with restored credentials...");
-    const docker = new DockerService(installDir);
-    docker.stop();
-    docker.start();
+    console.log();
+    const failed: string[] = [];
+    for (const spec of restorable) {
+      const previous = fs.readFileSync(path.join(secretsDir, spec.file + ".bak"), "utf8").trim();
+      try {
+        rollbackOne(deps, cfg, spec, previous);
+        success(`${spec.label} restored and verified`);
+      } catch (err) {
+        failed.push(spec.label);
+        fail(`${spec.label} could NOT be restored: ${err instanceof Error ? err.message : err}`);
+      }
+    }
 
-    success("Credentials restored from backup");
+    console.log();
+    if (failed.length === 0) {
+      success(`All ${restorable.length} credentials restored from backup.`);
+    } else {
+      fail(`${failed.join(", ")} could not be restored. Investigate before running work.`);
+      process.exitCode = 1;
+    }
     console.log();
     this.credentialsShow(installDir);
   }
