@@ -137,10 +137,35 @@ jobs:
             DIGEST="${IMAGE##*@}"
             # Strip ghcr.io/ prefix for the API path
             API_PATH="${REPO#ghcr.io/}"
+            # ...and the tag, if the image is pinned as `name:tag@sha256:...`.
+            # Both forms are legal and the upstream compose uses both: most
+            # images are `name@sha256:...`, but minio is
+            # `minio:RELEASE.2025-04-22T22-12-26Z@sha256:...`. Leaving the tag
+            # in produced the scope `repository:ns/minio:RELEASE...:pull`,
+            # which GHCR rejects, so the token response had no `.token` and the
+            # node one-liner below died on `write(undefined)` - a crash in the
+            # middle of the loop, not a reported digest failure.
+            API_PATH="${API_PATH%%:*}"
 
-            # GHCR requires an auth token even for public images
+            # GHCR requires an auth token even for public images.
+            # Fail loudly if the response carries no token: writing `undefined`
+            # throws an opaque ERR_INVALID_ARG_TYPE that names nothing about
+            # the image or the scope that caused it.
             TOKEN=$(curl -s "https://ghcr.io/token?service=ghcr.io&scope=repository:${API_PATH}:pull" | \
-              node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).token)")
+              node -e "
+                const r = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+                if (!r.token) {
+                  console.error('no token in GHCR response: ' + JSON.stringify(r));
+                  process.exit(1);
+                }
+                process.stdout.write(r.token);
+              ") || true
+
+            if [ -z "$TOKEN" ]; then
+              echo "::error::Could not obtain a GHCR token for ${API_PATH} (from ${IMAGE})"
+              FAILED=1
+              continue
+            fi
 
             # Accept both single-arch manifests and multi-arch image indexes
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
