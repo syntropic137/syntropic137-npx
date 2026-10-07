@@ -47,13 +47,11 @@ import {
   CMD,
   BIN,
   COMMANDS,
-  CLAUDE_PLUGIN_REPO,
-  CLAUDE_PLUGIN_NAME,
-  CLAUDE_PLUGIN_FULL,
   GITHUB_BASE,
   GITHUB_SLUG_RE,
 } from "./constants.js";
 import { PKG_DIR, TEMPLATES_DIR, syncTemplate } from "./templates.js";
+import { promptAndInstallSkills } from "./skills.js";
 
 // ---------------------------------------------------------------------------
 // Version & paths
@@ -275,9 +273,9 @@ export class InitFlow {
       }
     }
 
-    // ── Step 7: Claude Code plugin ───────────────────────────────────────
-    step("Claude Code plugin");
-    await this.installClaudePlugin();
+    // ── Step 7: Agent skills (optional; never fails setup) ──────────────
+    step("Agent skills");
+    await promptAndInstallSkills({ askFirst: true });
 
     // ── Step 8: Syntropic137 CLI ─────────────────────────────────────────
     step("Syntropic137 CLI");
@@ -369,80 +367,6 @@ export class InitFlow {
       return null;
     }
   }
-
-  private async installClaudePlugin(): Promise<void> {
-    // Check if claude CLI is available
-    if (!InitFlow.hasClaudeCli()) {
-      info("Claude Code CLI not found — skipping plugin install.");
-      info("Install later: " + CMD.plugin);
-      return;
-    }
-
-    const installed = InitFlow.isPluginInstalled();
-    info("Adds slash commands and platform knowledge to Claude Code.");
-
-    if (installed) {
-      const proceed = await confirm("Update the Claude Code plugin?");
-      if (!proceed) { info("Skipped."); return; }
-    } else {
-      const proceed = await confirm("Install the Claude Code plugin? (recommended)");
-      if (!proceed) {
-        info("Skipped. Install later: " + CMD.plugin);
-        return;
-      }
-    }
-
-    InitFlow.syncPlugin(installed);
-  }
-
-  /** Check if `claude` CLI is on PATH. */
-  static hasClaudeCli(): boolean {
-    try {
-      execFileSync("claude", ["--version"], { stdio: "pipe" });
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  /** Check if the syntropic137 plugin is already installed. */
-  static isPluginInstalled(): boolean {
-    try {
-      const output = execFileSync("claude", ["plugin", "list"], {
-        encoding: "utf-8",
-        stdio: "pipe",
-      });
-      return output.includes(`${CLAUDE_PLUGIN_NAME}@`);
-    } catch {
-      return false;
-    }
-  }
-
-  /** Install or update the Claude Code plugin. */
-  static syncPlugin(isInstalled: boolean): void {
-    try {
-      if (isInstalled) {
-        // Refresh marketplace clone first (claude plugin update doesn't do this automatically)
-        try {
-          execFileSync("claude", ["plugin", "marketplace", "update", CLAUDE_PLUGIN_NAME], { stdio: "pipe" });
-        } catch (err) {
-          warn("Could not refresh marketplace cache; attempting plugin update anyway.");
-          if (err instanceof Error) info(err.message);
-        }
-        execFileSync("claude", ["plugin", "update", CLAUDE_PLUGIN_FULL], { stdio: "pipe" });
-        success("Claude Code plugin updated");
-      } else {
-        execFileSync("claude", ["plugin", "marketplace", "add", CLAUDE_PLUGIN_REPO], { stdio: "pipe" });
-        execFileSync("claude", ["plugin", "install", CLAUDE_PLUGIN_NAME], { stdio: "pipe" });
-        success("Claude Code plugin installed");
-      }
-    } catch (err) {
-      const action = isInstalled ? "update" : "install";
-      warn(`Could not ${action} Claude Code plugin.`);
-      if (err instanceof Error) info(err.message);
-      info("Install manually: claude plugin marketplace add " + CLAUDE_PLUGIN_REPO);
-    }
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -496,8 +420,8 @@ export class CLI {
         new DockerService(this.resolveDir(dir)).update(TEMPLATES_DIR);
         break;
 
-      case "plugin":
-        CLI.pluginSync();
+      case "skills":
+        if (!(await promptAndInstallSkills({ askFirst: false }))) process.exit(1);
         break;
 
       case "github-app":
@@ -550,17 +474,6 @@ export class CLI {
       info(`Install manually: npm install -g @syntropic137/cli@${targetRange}`);
       process.exit(1);
     }
-  }
-
-  private static pluginSync(): void {
-    if (!InitFlow.hasClaudeCli()) {
-      fail("Claude Code CLI not found.");
-      info("Install Claude Code: https://docs.anthropic.com/en/docs/claude-code");
-      process.exit(1);
-    }
-
-    const installed = InitFlow.isPluginInstalled();
-    InitFlow.syncPlugin(installed);
   }
 
   // ── GitHub App management ────────────────────────────────────────────
@@ -1051,7 +964,7 @@ export class CLI {
       process.exit(0);
     }
 
-    const subcommands = ["init", "status", "stop", "start", "logs", "update", "plugin", "github-app", "tunnel", "cli", "credentials", "help"] as const;
+    const subcommands = ["init", "status", "stop", "start", "logs", "update", "skills", "github-app", "tunnel", "cli", "credentials", "help"] as const;
     type Subcommand = (typeof subcommands)[number];
     const firstArg = args[0];
     let command: CliOptions["command"] = "menu";
