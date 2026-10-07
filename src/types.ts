@@ -1,6 +1,6 @@
 /** CLI options parsed from argv. */
 export interface CliOptions {
-  command: "init" | "status" | "stop" | "start" | "logs" | "update" | "plugin" | "github-app" | "tunnel" | "cli" | "credentials" | "menu" | "help";
+  command: "init" | "status" | "stop" | "start" | "logs" | "update" | "skills" | "github-app" | "tunnel" | "cli" | "credentials" | "menu" | "help";
   /** Sub-action for the `credentials` command. */
   credentialsAction?: "show" | "rotate" | "rollback";
   org?: string;

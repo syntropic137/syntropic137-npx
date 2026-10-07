@@ -95,7 +95,7 @@ describe("parseArgs", () => {
     expect(parseArgs(["node", "cli", "start"]).command).toBe("start");
     expect(parseArgs(["node", "cli", "logs"]).command).toBe("logs");
     expect(parseArgs(["node", "cli", "update"]).command).toBe("update");
-    expect(parseArgs(["node", "cli", "plugin"]).command).toBe("plugin");
+    expect(parseArgs(["node", "cli", "skills"]).command).toBe("skills");
     expect(parseArgs(["node", "cli", "github-app"]).command).toBe("github-app");
     expect(parseArgs(["node", "cli", "tunnel"]).command).toBe("tunnel");
     expect(parseArgs(["node", "cli", "cli"]).command).toBe("cli");

@@ -18,7 +18,7 @@ The `init` command walks you through a 12-step interactive setup:
 4. **Generate secrets:** creates cryptographically random passwords for Postgres, Redis, and MinIO (chmod 600)
 5. **Configure LLM provider:** prompts for your Anthropic API key (or picks up `ANTHROPIC_API_KEY` from your environment)
 6. **GitHub App setup:** runs the [GitHub App Manifest flow](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest) to create a GitHub App with the right permissions in one click (optional, skippable)
-7. **Claude Code plugin:** installs the Syntropic137 plugin for Claude Code (optional, skippable)
+7. **Agent skills:** installs the [Syntropic137 skills](https://github.com/syntropic137/syntropic137-skills) with the [`skills`](https://www.npmjs.com/package/skills) CLI for the agents you choose (default: Claude Code and Codex), in the current project or user-wide (optional, skippable, never fails setup)
 8. **Syntropic137 CLI:** installs the `syn` CLI for managing workflows and executions (optional, skippable)
 9. **Write .env:** renders the final configuration from your answers
 10. **Pull images:** `docker compose pull` from GHCR

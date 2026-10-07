@@ -65,7 +65,7 @@ export const COMMANDS: readonly CommandDef[] = [
   { name: "logs",        description: "Tail container logs" },
   { name: "update",      description: "Pull latest images and restart" },
   { name: "cli",         description: "Install or update the Syntropic137 CLI" },
-  { name: "plugin",      description: "Install or update the Claude Code plugin" },
+  { name: "skills",      description: "Install the Syntropic137 agent skills" },
   { name: "github-app",  description: "Open GitHub App settings in your browser" },
   { name: "tunnel",      description: "Set up remote access (Cloudflare tunnel)" },
   { name: "credentials", description: "View, rotate, or roll back service credentials", args: "[show|rotate|rollback]" },
@@ -103,13 +103,20 @@ export const WEBHOOK_SECRET_FILE = "github-webhook-secret.txt";
 export const CLIENT_SECRET_FILE = "github-client-secret.txt";
 
 // ---------------------------------------------------------------------------
-// Claude Code plugin
+// Agent skills (installed with the `skills` CLI)
 // ---------------------------------------------------------------------------
 
-export const CLAUDE_PLUGIN_REPO = "syntropic137/syntropic137-claude-plugin";
-export const CLAUDE_PLUGIN_NAME = "syntropic137";
-/** Full name@source used by `claude plugin update` */
-export const CLAUDE_PLUGIN_FULL = "syntropic137@syntropic137";
+export const SKILLS_REPO = "syntropic137/syntropic137-skills";
+/**
+ * Exact version of the `skills` CLI run through npx. Pinned so setup never
+ * executes an unreviewed release; 1.7.0 is the version the skills repo README
+ * was verified against.
+ */
+export const SKILLS_CLI_PACKAGE = "skills@1.7.0";
+export const DEFAULT_SKILL_AGENTS: readonly string[] = ["claude-code", "codex"];
+/** Agent ids accepted from user input: lowercase slug, never a leading `-`. */
+export const SKILL_AGENT_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
+export const SKILLS_INSTALL_TIMEOUT_MS = 180_000;
 
 // ---------------------------------------------------------------------------
 // GitHub

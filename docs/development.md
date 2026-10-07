@@ -22,6 +22,7 @@ src/
 ├── server.ts       Local HTTP servers for OAuth callback + form submit
 ├── docker.ts       Docker Compose lifecycle (check, pull, up, health)
 ├── secrets.ts      Cryptographic secret generation
+├── skills.ts       Optional agent skills install (`npx skills add`, argv only)
 ├── config.ts       .env template rendering
 ├── constants.ts    Shared constants (paths, defaults, command definitions)
 ├── ui.ts           ANSI colors, spinner, prompts (stdlib only)
