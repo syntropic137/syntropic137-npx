@@ -3,8 +3,8 @@
 ## Setup
 
 ```sh
-git clone https://github.com/syntropic137/syntropic137-npx.git
-cd syntropic137-npx
+git clone https://github.com/syntropic137/syntropic137-setup.git
+cd syntropic137-setup
 npm install        # Dev deps only: typescript, vitest, @types/node
 npm run build      # tsc → dist/
 npm test           # vitest

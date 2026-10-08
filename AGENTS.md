@@ -1,4 +1,4 @@
-# syntropic137-npx
+# syntropic137-setup
 
 > **Releasing?** Read [docs/releasing.md](./docs/releasing.md) first: versioning scheme, template sync, publishing workflow, and CI checks.
 

@@ -82,7 +82,7 @@ The publish workflow references `environment: npm-publish`. GitHub Actions will 
 
 1. Go to `@syntropic137/setup` -> Settings -> Publishing access
 2. Add a Trusted Publisher with these exact values:
-   - **Repository**: `syntropic137/syntropic137-npx`
+   - **Repository**: `syntropic137/syntropic137-setup`
    - **Workflow**: `publish.yml`
    - **Environment**: `npm-publish`
 
