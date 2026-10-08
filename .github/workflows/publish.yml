@@ -9,7 +9,7 @@
 #
 # Prerequisites:
 #   - Configure Trusted Publisher on npmjs.com for @syntropic137/setup:
-#     repo: syntropic137/syntropic137-npx
+#     repo: syntropic137/syntropic137-setup
 #     workflow: publish.yml
 #     environment: npm-publish
 #   - Requires npm >= 11.5.1 and Node >= 22.14.0 for OIDC token exchange

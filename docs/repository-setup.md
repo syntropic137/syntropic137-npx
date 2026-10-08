@@ -8,7 +8,7 @@ Only one GitHub Actions secret is required. npm publishing uses Trusted Publishi
 
 | Secret | Repo | Purpose |
 |--------|------|---------|
-| `NPX_DISPATCH_TOKEN` | **main repo** (`syntropic137/syntropic137`) | Fine-grained PAT scoped to `syntropic137/syntropic137-npx` only. Used to trigger `workflow_dispatch` events via `gh workflow run` that start template sync PRs. |
+| `NPX_DISPATCH_TOKEN` | **main repo** (`syntropic137/syntropic137`) | Fine-grained PAT scoped to `syntropic137/syntropic137-setup` only. Used to trigger `workflow_dispatch` events via `gh workflow run` that start template sync PRs. |
 
 ### PAT permissions (fine-grained)
 
@@ -32,7 +32,7 @@ Instead of storing an npm token, the publish workflow authenticates via OIDC. Th
 **Both of the following are required** for the publish workflow to work:
 
 1. **Create an `npm-publish` environment** in GitHub: Settings → Environments → New environment → `npm-publish`. The publish workflow references this environment — it will fail without it. See [releasing.md](./releasing.md#1-create-the-npm-publish-github-environment) for recommended protections.
-2. **Configure Trusted Publisher** on npmjs.com: `@syntropic137/setup` → Settings → Publishing access → add repo `syntropic137/syntropic137-npx`, workflow `publish.yml`, environment `npm-publish`.
+2. **Configure Trusted Publisher** on npmjs.com: `@syntropic137/setup` → Settings → Publishing access → add repo `syntropic137/syntropic137-setup`, workflow `publish.yml`, environment `npm-publish`.
 
 ### Additional hardening (on the `npm-publish` environment)
 
@@ -50,7 +50,7 @@ Settings -> Actions -> General -> Workflow permissions -> **"Allow GitHub Action
 
 This must be enabled first — it gates the repo-level setting.
 
-### 2. Repository level (`syntropic137-npx`)
+### 2. Repository level (`syntropic137-setup`)
 
 Settings -> Actions -> General -> Workflow permissions -> **"Allow GitHub Actions to create and approve pull requests"** -> enable
 
@@ -90,7 +90,7 @@ When the main platform repo cuts a release, it notifies this repo to sync templa
 
 ### Setup in the main repo
 
-1. Create a fine-grained PAT scoped to `syntropic137/syntropic137-npx` only with `Actions: Read and write` + `Contents: Read-only` (see [PAT permissions](#pat-permissions-fine-grained) above)
+1. Create a fine-grained PAT scoped to `syntropic137/syntropic137-setup` only with `Actions: Read and write` + `Contents: Read-only` (see [PAT permissions](#pat-permissions-fine-grained) above)
 2. Add it as a secret `NPX_DISPATCH_TOKEN` in the main repo (`syntropic137/syntropic137`)
 3. The release workflow (`release-containers.yaml`) already includes a step that runs `gh workflow run template-sync.yml` — see [UPSTREAM_DISPATCH.md](../.github/UPSTREAM_DISPATCH.md) for the snippet
 

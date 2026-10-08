@@ -12,7 +12,7 @@ only deploys what's on `main` — and the token cannot push to `main`. See
 
 ## Required Setup
 
-1. Create a fine-grained PAT scoped to `syntropic137/syntropic137-npx` only
+1. Create a fine-grained PAT scoped to `syntropic137/syntropic137-setup` only
 2. Grant **`Actions: Read and write`** + **`Contents: Read-only`** permissions
    - `Contents: Read` is required because `gh workflow run` internally calls
      `repository.defaultBranchRef` via GraphQL to resolve the default branch
@@ -23,12 +23,12 @@ only deploys what's on `main` — and the token cannot push to `main`. See
 Add this to your release workflow (e.g. `.github/workflows/release-containers.yaml`):
 
 ```yaml
-  - name: Notify syntropic137-npx to sync templates
+  - name: Notify syntropic137-setup to sync templates
     env:
       GH_TOKEN: ${{ secrets.NPX_DISPATCH_TOKEN }}
     run: |
       gh workflow run template-sync.yml \
-        --repo syntropic137/syntropic137-npx \
+        --repo syntropic137/syntropic137-setup \
         --field ref="${{ steps.version.outputs.version }}"
 ```
 
