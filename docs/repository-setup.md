@@ -32,7 +32,7 @@ Instead of storing an npm token, the publish workflow authenticates via OIDC. Th
 **Both of the following are required** for the publish workflow to work:
 
 1. **Create an `npm-publish` environment** in GitHub: Settings → Environments → New environment → `npm-publish`. The publish workflow references this environment — it will fail without it. See [releasing.md](./releasing.md#1-create-the-npm-publish-github-environment) for recommended protections.
-2. **Configure Trusted Publisher** on npmjs.com: `@syntropic137/setup` → Settings → Publishing access → add repo `syntropic137/syntropic137-setup`, workflow `publish.yml`, environment `npm-publish`.
+2. **Configure Trusted Publisher** on npmjs.com: `@syntropic137/setup` → Settings → Publishing access → add repo `syntropic137/syntropic137-setup`, workflow `publish.yml`, environment `npm-publish`, and enable direct publish under Allowed actions (see [releasing.md](releasing.md#2-configure-trusted-publisher-on-npmjscom)).
 
 ### Additional hardening (on the `npm-publish` environment)
 

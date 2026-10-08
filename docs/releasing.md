@@ -85,6 +85,9 @@ The publish workflow references `environment: npm-publish`. GitHub Actions will 
    - **Repository**: `syntropic137/syntropic137-setup`
    - **Workflow**: `publish.yml`
    - **Environment**: `npm-publish`
+   - **Allowed actions**: enable direct publish (the workflow runs `npm publish`). Without it the publish fails with `403 OIDC permission denied for this action`. Leave dist-tags off.
+
+The fields are fixed once saved. If the repo is ever renamed again, delete the entry and create a new one before the next publish.
 
 Every published version includes a provenance attestation linking it to the exact commit and workflow run. Users can verify with `npm audit signatures`.
 
