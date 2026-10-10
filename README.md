@@ -15,7 +15,7 @@ The `init` command walks you through a 12-step interactive setup:
 1. **Check Docker:** verifies Docker and Compose v2.20+ are installed and running
 2. **Create directory:** sets up `~/.syntropic137/` with the required structure
 3. **Copy templates:** writes the Docker Compose file, entrypoint script, env template, and database init SQL
-4. **Generate secrets:** creates cryptographically random passwords for Postgres, Redis, and MinIO (chmod 600)
+4. **Generate secrets:** creates cryptographically random passwords for Postgres, Redis, and MinIO (files 0644 inside a 0700 `secrets/` directory, so the containers can read them and no other host user can)
 5. **Configure LLM provider:** prompts for your Anthropic API key (or picks up `ANTHROPIC_API_KEY` from your environment)
 6. **GitHub App setup:** runs the [GitHub App Manifest flow](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest) to create a GitHub App with the right permissions in one click (optional, skippable)
 7. **Claude Code plugin:** installs the Syntropic137 plugin for Claude Code (optional, skippable)
@@ -64,7 +64,7 @@ When you don't pass `--skip-github`, the CLI creates a GitHub App automatically.
 3. GitHub shows you a "Create App" confirmation page, then you click Create
 4. GitHub redirects back to the local server with a temporary code
 5. The CLI exchanges that code for the app's credentials (private key, webhook secret, client secret) via the GitHub API
-6. Credentials are saved to `~/.syntropic137/secrets/` with chmod 600
+6. Credentials are saved to `~/.syntropic137/secrets/` (0644 inside the 0700 directory; the API container reads the PEM as a non-root user)
 7. Your browser opens the app's installation page so you can choose which repos to grant access
 
 The private key (PEM) is mounted into containers as a Docker secret (tmpfs-backed, never written to the container filesystem). Installation IDs are resolved dynamically at runtime, so the app can be installed across multiple orgs and repos. Repositories granted to the installation are discovered automatically at startup and refreshed every hour without requiring a webhook URL.

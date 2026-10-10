@@ -40,13 +40,22 @@ describe("generateSecrets", () => {
     }
   });
 
-  it("sets mode 0o600 on files", () => {
+  it("container-read secrets are 0644 inside a 0700 directory (issue #78: minio runs as 999)", () => {
     generateSecrets(tmpDir);
 
-    for (const name of ["db-password.secret", "redis-password.secret", "minio-password.secret"]) {
+    expect(fs.statSync(tmpDir).mode & 0o777).toBe(0o700);
+    for (const name of ["db-password.secret", "redis-password.secret", "minio-password.secret", "github-app-private-key.pem"]) {
       const stat = fs.statSync(path.join(tmpDir, name));
-      expect(stat.mode & 0o777).toBe(0o600);
+      expect(stat.mode & 0o777).toBe(0o644);
     }
+  });
+
+  it("force regeneration relaxes a file an older setup wrote 0600", () => {
+    const existing = path.join(tmpDir, "minio-password.secret");
+    fs.mkdirSync(tmpDir, { recursive: true });
+    fs.writeFileSync(existing, "old", { mode: 0o600 });
+    generateSecrets(tmpDir, true);
+    expect(fs.statSync(existing).mode & 0o777).toBe(0o644);
   });
 
   it("does not overwrite existing files by default", () => {
@@ -109,10 +118,10 @@ describe("savePem", () => {
     expect(fs.readFileSync(result, "utf-8")).toBe(pem);
   });
 
-  it("sets mode 0o600", () => {
+  it("is readable by the api container (0644)", () => {
     savePem(tmpDir, "test");
     const stat = fs.statSync(path.join(tmpDir, "github-app-private-key.pem"));
-    expect(stat.mode & 0o777).toBe(0o600);
+    expect(stat.mode & 0o777).toBe(0o644);
   });
 });
 

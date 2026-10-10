@@ -15,18 +15,31 @@ import {
  * Each instance is bound to a specific secrets directory and provides
  * methods to generate, save, and back up secret files.
  */
+/**
+ * Mode of a secret file the containers read. Compose `file:` secrets are bind
+ * mounts that keep the host file's owner and mode, and the consumers are not
+ * root: minio runs as 999:999 and the collector drops capabilities. A 0600
+ * file owned by the installing user is therefore unreadable inside them and a
+ * fresh install never becomes healthy (issue #78). Host-side secrecy comes
+ * from the directory, which is 0700, so no other host user can reach the
+ * files at all.
+ */
+export const CONTAINER_READABLE_MODE = 0o644;
+export const SECRETS_DIR_MODE = 0o700;
+
 export class SecretsManager {
   constructor(private readonly secretsDir: string) {}
 
   /**
    * Generate cryptographically random secret files.
-   * Each file contains a 32-byte hex string (64 chars), chmod 600.
+   * Each file contains a 32-byte hex string (64 chars), mode 0644 inside a 0700 directory (see CONTAINER_READABLE_MODE).
    *
    * @param force — regenerate all secrets even if they exist;
    *                old values are backed up to `<name>.bak`.
    */
   generate(force = false): void {
-    fs.mkdirSync(this.secretsDir, { recursive: true });
+    fs.mkdirSync(this.secretsDir, { recursive: true, mode: SECRETS_DIR_MODE });
+    fs.chmodSync(this.secretsDir, SECRETS_DIR_MODE); // mkdir honours the umask; the directory is the boundary
 
     for (const filename of SECRET_FILES) {
       const filePath = path.join(this.secretsDir, filename);
@@ -41,21 +54,23 @@ export class SecretsManager {
         info(`  Backed up ${filename} → ${filename}.bak`);
       }
       const secret = crypto.randomBytes(32).toString("hex");
-      fs.writeFileSync(filePath, secret, { mode: 0o600 });
+      fs.writeFileSync(filePath, secret, { mode: CONTAINER_READABLE_MODE });
+      fs.chmodSync(filePath, CONTAINER_READABLE_MODE); // writeFileSync keeps an existing file's old mode
       success(`Generated ${filename}`);
     }
 
     // Create empty PEM placeholder so Docker secrets don't fail
     const pemPath = path.join(this.secretsDir, PEM_FILE);
     if (!fs.existsSync(pemPath)) {
-      fs.writeFileSync(pemPath, "", { mode: 0o600 });
+      fs.writeFileSync(pemPath, "", { mode: CONTAINER_READABLE_MODE });
     }
   }
 
   /** Save a GitHub App private key PEM file. Returns the file path. */
   savePem(pem: string): string {
     const pemPath = path.join(this.secretsDir, PEM_FILE);
-    fs.writeFileSync(pemPath, pem, { mode: 0o600 });
+    fs.writeFileSync(pemPath, pem, { mode: CONTAINER_READABLE_MODE });
+    fs.chmodSync(pemPath, CONTAINER_READABLE_MODE);
     success(`Saved ${PEM_FILE}`);
     return pemPath;
   }
