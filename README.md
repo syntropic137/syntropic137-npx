@@ -83,7 +83,7 @@ Everything lives in `~/.syntropic137/`:
 ├── init-db/
 │   └── 01-create-databases.sql        # Database schema
 ├── secrets/
-│   ├── db-password.secret             # Postgres password (chmod 600)
+│   ├── db-password.secret             # Postgres password (0644; dir is 0700)
 │   ├── redis-password.secret          # Redis password (chmod 600)
 │   ├── minio-password.secret          # MinIO password (chmod 600)
 │   └── github-app-private-key.pem     # GitHub App private key (chmod 600)
